@@ -1,0 +1,67 @@
+# ----------------------------
+# Python cache & temp files
+# ----------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.ipynb_checkpoints/
+
+# ----------------------------
+# Virtual environments
+# ----------------------------
+env/
+venv/
+fyp_env/
+.venv/
+
+# ----------------------------
+# OS-specific files
+# ----------------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------------
+# IDE / Editor settings
+# ----------------------------
+.vscode/
+.idea/
+
+# ----------------------------
+# Large datasets (DO NOT COMMIT)
+# ----------------------------
+datasets/raw/
+datasets/density/
+
+# ----------------------------
+# Model checkpoints & weights
+# ----------------------------
+*.pth
+*.pt
+checkpoints/
+
+# ----------------------------
+# Training outputs & logs
+# ----------------------------
+results/
+logs/
+*.log
+
+# ----------------------------
+# Colab / Jupyter temporary files
+# ----------------------------
+*.ipynb
+*.tmp
+
+# ----------------------------
+# Zip / compressed files
+# ----------------------------
+*.zip
+*.tar
+*.tar.gz
+
+# ----------------------------
+# System temp files
+# ----------------------------
+*.swp
+*.bak
