@@ -37,9 +37,10 @@ dataloader = DataLoader(
     dataset,
     batch_size=BATCH_SIZE,
     shuffle=True,
-    num_workers=2,
-    pin_memory=True
+    num_workers=0,   # IMPORTANT for Colab
+    pin_memory=False
 )
+
 
 # ----------------------------
 # Model, Loss, Optimizer
