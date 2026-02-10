@@ -1,0 +1,9 @@
+# Minimal dependencies for local dev and Colab
+numpy
+opencv-python
+scipy
+matplotlib
+pandas
+scikit-learn
+torch
+torchvision
