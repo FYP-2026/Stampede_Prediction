@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stampede EWS — Admin Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0a0b0e;
+    --bg2:      #111318;
+    --bg3:      #191c24;
+    --border:   #1e2330;
+    --border2:  #2a3045;
+    --text:     #e8eaf0;
+    --muted:    #5a6380;
+    --accent:   #ff4d4d;
+    --accent2:  #ff8c42;
+    --safe:     #2ecc71;
+    --warn:     #f39c12;
+    --info:     #3b82f6;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Syne', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Login ── */
+  #login-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: var(--bg);
+  }
+  .login-card {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    padding: 48px;
+    width: 380px;
+  }
+  .login-card h1 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+  }
+  .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.5px; text-transform: uppercase; }
+  input[type=text], input[type=password] {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    margin-bottom: 18px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus { border-color: var(--accent); }
+  .btn {
+    display: block;
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.88; }
+  .btn-ghost {
+    background: var(--bg3);
+    color: var(--text);
+    border: 1px solid var(--border2);
+  }
+  .btn-safe { background: var(--safe); }
+  .btn-info { background: var(--info); }
+  .err { color: var(--accent); font-size: 12px; margin-top: 10px; }
+
+  /* ── Main App ── */
+  #app { display: none; flex-direction: column; min-height: 100vh; }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .brand-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .brand-name { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+  .brand-sub  { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .ws-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+  }
+  .ws-status.connected { color: var(--safe); border-color: var(--safe); }
+  .ws-status.disconnected { color: var(--accent); border-color: var(--accent); }
+
+  /* Layout */
+  .main {
+    display: grid;
+    grid-template-columns: 300px 1fr 320px;
+    flex: 1;
+    height: calc(100vh - 57px);
+    overflow: hidden;
+  }
+  .col { overflow-y: auto; padding: 20px; border-right: 1px solid var(--border); }
+  .col:last-child { border-right: none; }
+
+  /* Section headers */
+  .sec-hd {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Area cards */
+  .area-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .area-card:hover { border-color: var(--border2); }
+  .area-card.selected { border-color: var(--info); }
+  .area-card.risk { border-color: var(--accent); animation: glow-red 1.5s infinite; }
+  @keyframes glow-red { 0%,100%{border-color:var(--accent)} 50%{border-color:#ff000088} }
+  .area-name { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+  .area-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .area-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .stat {
+    background: var(--bg2);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .stat-label { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+  .stat-value { font-family: var(--mono); font-size: 16px; font-weight: 600; }
+  .stat-value.danger { color: var(--accent); }
+  .stat-value.safe   { color: var(--safe); }
+
+  /* Status badge */
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+  .badge-ok     { background: #2ecc7122; color: var(--safe); }
+  .badge-risk   { background: #ff4d4d22; color: var(--accent); }
+  .badge-closed { background: #f39c1222; color: var(--warn); }
+  .badge-open   { background: #3b82f622; color: var(--info); }
+
+  /* Alert cards */
+  .alert-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .alert-card.safe { border-left-color: var(--safe); }
+  .alert-hd {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+  .alert-title { font-size: 13px; font-weight: 700; }
+  .alert-time  { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .alert-body  { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .alert-actions { display: flex; gap: 8px; }
+  .alert-actions .btn { font-size: 12px; padding: 8px 12px; }
+
+  /* Volunteer list */
+  .vol-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg3);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+  .vol-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .vol-dot.online  { background: var(--safe); }
+  .vol-dot.offline { background: var(--muted); }
+  .vol-name { font-weight: 600; flex: 1; }
+  .vol-area { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+  /* Add area form */
+  .form-group { margin-bottom: 14px; }
+  input[type=number] {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+  }
+  input[type=number]:focus { border-color: var(--accent); }
+  select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+  }
+
+  /* Mid panel — live view placeholder */
+  .live-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .camera-placeholder {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    aspect-ratio: 16/9;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 13px;
+    gap: 8px;
+  }
+  .camera-icon { font-size: 32px; }
+
+  /* Grid heatmap */
+  .heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 3px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .heatmap-grid .cell {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    background: var(--bg2);
+    transition: background 0.4s;
+  }
+  .cell.risk { background: var(--accent); }
+  .cell.warn { background: var(--warn); }
+  .cell.ok   { background: #2ecc7144; }
+
+  /* Activity log */
+  .log-item {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .log-item span { color: var(--text); }
+
+  .tag-area-count {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+  /* Notification toast */
+  #toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .toast {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    max-width: 300px;
+    animation: slideIn 0.2s ease;
+  }
+  .toast.safe { border-left-color: var(--safe); }
+  @keyframes slideIn { from { transform: translateX(20px); opacity:0; } }
+
+  /* Assign panel */
+  .assign-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .btn-sm {
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border2);
+    background: var(--bg3);
+    color: var(--text);
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: background 0.15s;
+  }
+  .btn-sm:hover { background: var(--border2); }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="login-screen">
+  <div class="login-card">
+    <h1>⚠️ Admin Panel</h1>
+    <p>Stampede Early Warning System</p>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="l-user" value="admin" placeholder="admin">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="l-pass" value="admin123" placeholder="admin123">
+    </div>
+    <button class="btn" onclick="doLogin()">Sign In</button>
+    <div id="login-err" class="err"></div>
+  </div>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="app">
+  <div class="header">
+    <div class="header-brand">
+      <div class="brand-dot"></div>
+      <div>
+        <div class="brand-name">Stampede EWS</div>
+        <div class="brand-sub">Admin Control Centre</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span id="ws-badge" class="ws-status disconnected">● WS Disconnected</span>
+      <button class="btn btn-ghost" style="width:auto;padding:8px 16px;font-size:12px" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- ── LEFT: Areas + Volunteers ── -->
+    <div class="col">
+      <div class="sec-hd">Live Areas</div>
+      <div id="areas-list"></div>
+
+      <div class="divider"></div>
+      <div class="sec-hd">Add Area</div>
+      <div class="form-group">
+        <label>Area Name</label>
+        <input type="text" id="a-name" placeholder="Gate A East">
+      </div>
+      <div class="form-group">
+        <label>Camera Source (URL or device index)</label>
+        <input type="text" id="a-cam" placeholder="rtsp://... or 0">
+      </div>
+      <div class="form-group">
+        <label>Scene Width (m)</label>
+        <input type="number" id="a-w" value="30">
+      </div>
+      <div class="form-group">
+        <label>Scene Height (m)</label>
+        <input type="number" id="a-h" value="30">
+      </div>
+      <div class="form-group">
+        <label>Density Threshold (persons/m²)</label>
+        <input type="number" id="a-thresh" value="4" step="0.5">
+      </div>
+      <button class="btn btn-info" onclick="createArea()">Create Area</button>
+
+      <div class="divider"></div>
+      <div class="sec-hd">Volunteers</div>
+      <div id="vol-list"></div>
+    </div>
+
+    <!-- ── MIDDLE: Live View + Heatmap ── -->
+    <div class="col live-panel">
+      <div class="sec-hd" id="mid-title">Select an area to monitor</div>
+
+      <div class="camera-placeholder" id="cam-placeholder">
+        <div class="camera-icon">📷</div>
+        <div>Live feed rendered by inference server</div>
+        <div style="font-size:11px">Select an area from the left panel</div>
+      </div>
+
+      <div style="font-size:11px;color:var(--muted);padding:4px 0" id="cam-info"></div>
+
+      <div class="divider"></div>
+      <div class="sec-hd">Grid Density Map <span id="grid-area-name" style="font-weight:400;text-transform:none;letter-spacing:0"></span></div>
+      <div class="heatmap-grid" id="heatmap-grid"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;font-size:10px;color:var(--muted);font-family:var(--mono)">
+        <span>🟥 Overcrowded (&gt;threshold)</span>
+        <span>🟨 Elevated</span>
+        <span>🟩 Safe</span>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sec-hd">Activity Log</div>
+      <div id="activity-log"></div>
+
+      <!-- Assign volunteer panel -->
+      <div class="divider"></div>
+      <div class="sec-hd">Assign Volunteer to Selected Area</div>
+      <div id="assign-panel">
+        <div style="color:var(--muted);font-size:13px">Select an area first</div>
+      </div>
+    </div>
+
+    <!-- ── RIGHT: Alerts ── -->
+    <div class="col">
+      <div class="sec-hd">Pending Alerts</div>
+      <div id="alerts-list"></div>
+
+      <div class="divider"></div>
+      <div class="sec-hd">Resolved</div>
+      <div id="resolved-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+const API = 'http://localhost:8000';
+let token = null;
+let ws = null;
+let selectedAreaId = null;
+let areas = {};
+let volunteers = [];
+let pendingAlerts = {};
+let gridState = {};
+
+// ── Auth ─────────────────────────────────────────────────────────────────
+
+async function doLogin() {
+  const user = document.getElementById('l-user').value;
+  const pass = document.getElementById('l-pass').value;
+  try {
+    const r = await fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: user, password: pass, role: 'admin' })
+    });
+    const d = await r.json();
+    if (!r.ok) { document.getElementById('login-err').textContent = d.detail; return; }
+    token = d.token;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    initApp();
+  } catch(e) {
+    document.getElementById('login-err').textContent = 'Cannot reach backend server.';
+  }
+}
+
+function doLogout() {
+  token = null;
+  if (ws) ws.close();
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+
+function initApp() {
+  initGrid();
+  connectWS();
+  loadAreas();
+  loadVolunteers();
+  loadAlerts();
+  setInterval(() => { loadAreas(); loadVolunteers(); loadAlerts(); }, 10000);
+}
+
+function initGrid() {
+  const g = document.getElementById('heatmap-grid');
+  g.innerHTML = '';
+  for (let i = 0; i < 64; i++) {
+    const c = document.createElement('div');
+    c.className = 'cell';
+    c.id = `cell-${i}`;
+    g.appendChild(c);
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────
+
+function connectWS() {
+  if (!token) return;
+  ws = new WebSocket(`ws://localhost:8000/ws/admin/${token}`);
+  ws.onopen = () => {
+    document.getElementById('ws-badge').textContent = '● Live';
+    document.getElementById('ws-badge').className = 'ws-status connected';
+  };
+  ws.onclose = () => {
+    document.getElementById('ws-badge').textContent = '● Disconnected';
+    document.getElementById('ws-badge').className = 'ws-status disconnected';
+    setTimeout(connectWS, 3000);
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleWS(msg);
+  };
+}
+
+function handleWS(msg) {
+  if (msg.type === 'metric_update') {
+    updateAreaCard(msg.area_id, msg.count, msg.density, msg.risk);
+    if (msg.area_id === selectedAreaId) refreshGridForSelected();
+    addLog(msg.area_id, `Count: ${msg.count} | Density: ${msg.density}/m²`, msg.risk ? 'danger' : '');
+  } else if (msg.type === 'risk_alert') {
+    showToast(`🚨 RISK: ${msg.area_name} — ${msg.density}/m²`, 'risk');
+    addPendingAlert(msg);
+    renderAlerts();
+    loadAreas();
+  } else if (msg.type === 'safe_report') {
+    showToast(`✅ Volunteer reports safe: ${msg.area_name}`, 'safe');
+    addPendingAlert(msg);
+    renderAlerts();
+  } else if (msg.type === 'area_status_changed') {
+    loadAreas();
+  }
+}
+
+// ── Data loaders ──────────────────────────────────────────────────────────
+
+async function apiFetch(path, opts = {}) {
+  const r = await fetch(`${API}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...(opts.headers || {})
+    }
+  });
+  return r.json();
+}
+
+async function loadAreas() {
+  const data = await apiFetch('/areas');
+  areas = {};
+  data.forEach(a => { areas[a.id] = a; });
+  renderAreaList();
+}
+
+async function loadVolunteers() {
+  const data = await apiFetch('/volunteers');
+  volunteers = data;
+  renderVolList();
+  renderAssignPanel();
+}
+
+async function loadAlerts() {
+  const data = await apiFetch('/alerts');
+  data.forEach(a => { if (!a.resolved) pendingAlerts[a.id] = a; });
+  renderAlerts();
+}
+
+// ── Renderers ─────────────────────────────────────────────────────────────
+
+function renderAreaList() {
+  const el = document.getElementById('areas-list');
+  el.innerHTML = '';
+  Object.values(areas).forEach(a => {
+    const risk = a.risk_flagged;
+    const div = document.createElement('div');
+    div.className = `area-card ${risk ? 'risk' : ''} ${a.id === selectedAreaId ? 'selected' : ''}`;
+    div.onclick = () => selectArea(a.id);
+    const badge = risk ? `<span class="badge badge-risk">RISK</span>` :
+                  a.status === 'closed' ? `<span class="badge badge-closed">CLOSED</span>` :
+                  `<span class="badge badge-ok">OK</span>`;
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="area-name">${a.name}</div>${badge}
+      </div>
+      <div class="area-meta">${a.camera_source}</div>
+      <div class="area-stats">
+        <div class="stat">
+          <div class="stat-label">Count</div>
+          <div class="stat-value ${risk?'danger':'safe'}">${(a.current_count||0).toFixed(1)}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Density /m²</div>
+          <div class="stat-value ${risk?'danger':'safe'}">${(a.current_density||0).toFixed(2)}</div>
+        </div>
+      </div>`;
+    el.appendChild(div);
+  });
+}
+
+function renderVolList() {
+  const el = document.getElementById('vol-list');
+  el.innerHTML = '';
+  volunteers.forEach(v => {
+    const online = v.status !== 'offline';
+    el.innerHTML += `
+      <div class="vol-item">
+        <div class="vol-dot ${online?'online':'offline'}"></div>
+        <div>
+          <div class="vol-name">${v.name}</div>
+          <div class="vol-area">${v.area_name || 'Unassigned'}</div>
+        </div>
+        <div class="badge ${online?'badge-ok':''}">
+          ${v.status}
+        </div>
+      </div>`;
+  });
+}
+
+function renderAlerts() {
+  const pending = document.getElementById('alerts-list');
+  const resolved = document.getElementById('resolved-list');
+  pending.innerHTML = '';
+  resolved.innerHTML = '';
+
+  Object.values(pendingAlerts).forEach(a => {
+    const div = document.createElement('div');
+    div.className = `alert-card ${a.alert_type === 'safe_reported' ? 'safe' : ''}`;
+
+    let actions = '';
+    if (a.alert_type === 'risk_detected' && !a.admin_approved) {
+      actions = `<div class="alert-actions">
+        <button class="btn" onclick="approveAlert('${a.id}','close_area')">Close Area</button>
+        <button class="btn btn-ghost" onclick="dismissAlert('${a.id}')">Dismiss</button>
+      </div>`;
+    } else if (a.alert_type === 'safe_reported') {
+      actions = `<div class="alert-actions">
+        <button class="btn btn-safe" onclick="approveAlert('${a.id}','open_area')">Reopen Area</button>
+        <button class="btn btn-ghost" onclick="dismissAlert('${a.id}')">Hold</button>
+      </div>`;
+    }
+
+    div.innerHTML = `
+      <div class="alert-hd">
+        <div class="alert-title">
+          ${a.alert_type === 'safe_reported' ? '✅' : '🚨'} ${a.area_name}
+        </div>
+        <div class="alert-time">${new Date(a.created_at).toLocaleTimeString()}</div>
+      </div>
+      <div class="alert-body">
+        ${a.alert_type === 'risk_detected'
+          ? `Density: ${(a.density||0).toFixed(2)}/m² — Count: ${(a.count||0).toFixed(0)}`
+          : 'Volunteer reports area is now safe'}
+      </div>
+      ${actions}`;
+    pending.appendChild(div);
+  });
+}
+
+function renderAssignPanel() {
+  const el = document.getElementById('assign-panel');
+  if (!selectedAreaId) { el.innerHTML = '<div style="color:var(--muted);font-size:13px">Select an area first</div>'; return; }
+  const unassigned = volunteers.filter(v => !v.area_id || v.area_id !== selectedAreaId);
+  if (!unassigned.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px">All volunteers assigned here</div>'; return; }
+  el.innerHTML = unassigned.map(v => `
+    <div class="assign-row">
+      <span>${v.name}</span>
+      <button class="btn-sm" onclick="assignVol('${v.id}')">Assign Here</button>
+    </div>`).join('');
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────
+
+async function createArea() {
+  const data = {
+    name: document.getElementById('a-name').value,
+    camera_source: document.getElementById('a-cam').value,
+    scene_width_m: parseFloat(document.getElementById('a-w').value),
+    scene_height_m: parseFloat(document.getElementById('a-h').value),
+    density_threshold: parseFloat(document.getElementById('a-thresh').value),
+  };
+  if (!data.name || !data.camera_source) { alert('Name and camera source required'); return; }
+  const r = await apiFetch('/areas', { method: 'POST', body: JSON.stringify(data) });
+  showToast(`Area created: ${data.name}`, 'safe');
+  loadAreas();
+}
+
+async function assignVol(volId) {
+  await apiFetch(`/areas/${selectedAreaId}/assign`, {
+    method: 'POST',
+    body: JSON.stringify({ volunteer_id: volId })
+  });
+  showToast('Volunteer assigned!', 'safe');
+  loadVolunteers();
+}
+
+async function approveAlert(alertId, action) {
+  await apiFetch('/alerts/approve', {
+    method: 'POST',
+    body: JSON.stringify({ alert_id: alertId, action })
+  });
+  delete pendingAlerts[alertId];
+  renderAlerts();
+  showToast(action === 'close_area' ? '🔒 Area closed, volunteers notified' : '🔓 Area reopened', 'safe');
+  loadAreas();
+}
+
+function dismissAlert(alertId) {
+  delete pendingAlerts[alertId];
+  renderAlerts();
+}
+
+function addPendingAlert(msg) {
+  pendingAlerts[msg.alert_id] = {
+    id: msg.alert_id,
+    area_id: msg.area_id,
+    area_name: msg.area_name,
+    alert_type: msg.type === 'safe_report' ? 'safe_reported' : 'risk_detected',
+    density: msg.density,
+    count: msg.count,
+    created_at: msg.timestamp || new Date().toISOString(),
+    admin_approved: 0
+  };
+}
+
+function selectArea(areaId) {
+  selectedAreaId = areaId;
+  const a = areas[areaId];
+  document.getElementById('mid-title').textContent = `Live: ${a.name}`;
+  document.getElementById('cam-info').textContent =
+    `Camera: ${a.camera_source}  |  Scene: ${a.scene_width_m}m × ${a.scene_height_m}m  |  Threshold: ${a.density_threshold}/m²`;
+  document.getElementById('grid-area-name').textContent = `— ${a.name}`;
+  renderAreaList();
+  renderAssignPanel();
+}
+
+function updateAreaCard(areaId, count, density, risk) {
+  if (areas[areaId]) {
+    areas[areaId].current_count = count;
+    areas[areaId].current_density = density;
+    areas[areaId].risk_flagged = risk ? 1 : 0;
+    renderAreaList();
+  }
+}
+
+function refreshGridForSelected() {
+  if (!selectedAreaId || !gridState[selectedAreaId]) return;
+  const flags = gridState[selectedAreaId];
+  for (let i = 0; i < 64; i++) {
+    const c = document.getElementById(`cell-${i}`);
+    if (c) c.className = 'cell ok';
+  }
+  flags.forEach(f => {
+    const idx = f.row * 8 + f.col;
+    const c = document.getElementById(`cell-${idx}`);
+    if (c) c.className = 'cell risk';
+  });
+}
+
+function addLog(areaId, text, cls) {
+  const el = document.getElementById('activity-log');
+  const item = document.createElement('div');
+  const aname = areas[areaId] ? areas[areaId].name : areaId;
+  item.className = 'log-item';
+  item.innerHTML = `<span style="color:var(--muted)">${new Date().toLocaleTimeString()}</span>  <span>${aname}</span>  ${text}`;
+  el.insertBefore(item, el.firstChild);
+  while (el.children.length > 30) el.removeChild(el.lastChild);
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+
+function showToast(msg, type = '') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type === 'safe' ? 'safe' : ''}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+</script>
+</body>
+</html>
