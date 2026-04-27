@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EWS — Volunteer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:     #f5f4f1;
+    --bg2:    #ffffff;
+    --bg3:    #eceae4;
+    --border: #dcdbd6;
+    --text:   #1a1a18;
+    --muted:  #8a8980;
+    --red:    #e63946;
+    --green:  #2ecc71;
+    --amber:  #f39c12;
+    --blue:   #3b82f6;
+    --mono:   'DM Mono', monospace;
+    --sans:   'Plus Jakarta Sans', sans-serif;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  /* ── Login ── */
+  #login-screen {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .login-logo {
+    font-size: 48px;
+    margin-bottom: 8px;
+  }
+  .login-title {
+    font-size: 24px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .login-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 36px;
+    text-align: center;
+  }
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    margin-bottom: 16px;
+  }
+  label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 600; }
+  input[type=text], input[type=email], input[type=password], input[type=tel] {
+    width: 100%;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: var(--sans);
+    color: var(--text);
+    background: var(--bg);
+    margin-bottom: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus { border-color: var(--blue); }
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: var(--sans);
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.2px;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: var(--text); color: #fff; }
+  .btn-green   { background: var(--green); color: #fff; }
+  .btn-red     { background: var(--red); color: #fff; }
+  .btn-outline {
+    background: transparent;
+    border: 1.5px solid var(--border);
+    color: var(--text);
+    margin-top: 10px;
+  }
+  .err { color: var(--red); font-size: 12px; margin-top: 8px; }
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    margin-bottom: 0;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 12px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--text); }
+
+  /* ── Main app ── */
+  #app { display: none; }
+
+  .top-bar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .top-bar-name { font-size: 15px; font-weight: 700; }
+  .top-bar-area { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .ws-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .ws-dot.on { background: var(--green); animation: blink 2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .content { padding: 20px; }
+
+  /* Status card */
+  .status-card {
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 16px;
+    text-align: center;
+    border: 2px solid transparent;
+    transition: all 0.3s;
+  }
+  .status-card.ok {
+    background: #f0fff4;
+    border-color: var(--green);
+  }
+  .status-card.risk {
+    background: #fff0f0;
+    border-color: var(--red);
+    animation: pulse-red 1.5s infinite;
+  }
+  .status-card.closed {
+    background: #fff8e1;
+    border-color: var(--amber);
+  }
+  @keyframes pulse-red {
+    0%,100%{box-shadow: 0 0 0 0 rgba(230,57,70,0.3)}
+    50%{box-shadow: 0 0 0 12px rgba(230,57,70,0)}
+  }
+  .status-emoji { font-size: 48px; margin-bottom: 8px; }
+  .status-text { font-size: 22px; font-weight: 800; }
+  .status-sub  { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  /* Info grid */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .info-cell {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .info-cell-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
+  .info-cell-val   { font-size: 20px; font-weight: 700; font-family: var(--mono); }
+
+  /* Messages */
+  .msg-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .msg-meta { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 6px; }
+  .msg-urgent { border-left: 3px solid var(--red); }
+  .msg-safe   { border-left: 3px solid var(--green); }
+
+  /* Action buttons */
+  .action-area { margin-bottom: 16px; }
+  .action-area .btn { margin-bottom: 10px; }
+
+  /* Badge */
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--mono);
+  }
+  .badge-ok     { background: #d1fae5; color: #065f46; }
+  .badge-risk   { background: #fee2e2; color: #991b1b; }
+  .badge-closed { background: #fef3c7; color: #92400e; }
+
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  .sec-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; }
+
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 8px 0 20px;
+  }
+  .nav-btn {
+    flex: 1;
+    text-align: center;
+    padding: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .nav-btn.active { color: var(--text); font-weight: 700; }
+  .nav-icon { font-size: 20px; display: block; margin-bottom: 2px; }
+
+  .page { display: none; padding-bottom: 80px; }
+  .page.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN / REGISTER ── -->
+<div id="login-screen">
+  <div class="login-logo">🦺</div>
+  <div class="login-title">Volunteer Portal</div>
+  <div class="login-sub">Stampede Early Warning System</div>
+
+  <!-- Tabs -->
+  <div class="tabs" style="width:100%;border-radius:12px 12px 0 0;overflow:hidden;border:1px solid var(--border)">
+    <div class="tab-btn active" onclick="showTab('login')">Sign In</div>
+    <div class="tab-btn" onclick="showTab('register')">Register</div>
+  </div>
+
+  <div class="card" style="border-radius:0 0 16px 16px;margin-top:-1px">
+    <!-- Login form -->
+    <div id="login-form">
+      <div><label>Email</label><input type="email" id="l-email" placeholder="your@email.com"></div>
+      <div><label>Password</label><input type="password" id="l-pass" placeholder="••••••••"></div>
+      <button class="btn btn-primary" onclick="doLogin()">Sign In</button>
+      <div id="login-err" class="err"></div>
+    </div>
+    <!-- Register form -->
+    <div id="register-form" style="display:none">
+      <div><label>Full Name</label><input type="text" id="r-name" placeholder="Your name"></div>
+      <div><label>Email</label><input type="email" id="r-email" placeholder="your@email.com"></div>
+      <div><label>Phone (optional)</label><input type="tel" id="r-phone" placeholder="+91 98765..."></div>
+      <div><label>Password</label><input type="password" id="r-pass" placeholder="••••••••"></div>
+      <button class="btn btn-primary" onclick="doRegister()">Create Account</button>
+      <div id="reg-err" class="err"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="app">
+  <div class="top-bar">
+    <div>
+      <div class="top-bar-name" id="tb-name">Volunteer</div>
+      <div class="top-bar-area" id="tb-area">Loading...</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div id="ws-dot" class="ws-dot"></div>
+      <div style="font-size:11px;color:var(--muted);cursor:pointer" onclick="doLogout()">Exit</div>
+    </div>
+  </div>
+
+  <!-- Pages -->
+  <div id="page-home" class="page active">
+    <div class="content">
+      <!-- Status card -->
+      <div class="status-card ok" id="status-card">
+        <div class="status-emoji" id="status-emoji">✅</div>
+        <div class="status-text" id="status-text">Area Safe</div>
+        <div class="status-sub" id="status-sub">No action required</div>
+      </div>
+
+      <!-- Stats -->
+      <div class="info-grid">
+        <div class="info-cell">
+          <div class="info-cell-label">Count</div>
+          <div class="info-cell-val" id="stat-count">—</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-cell-label">Density /m²</div>
+          <div class="info-cell-val" id="stat-density">—</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-cell-label">Area Status</div>
+          <div class="info-cell-val" id="stat-status" style="font-size:14px">—</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-cell-label">Your Area</div>
+          <div class="info-cell-val" id="stat-area" style="font-size:13px">—</div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="action-area" id="action-area"></div>
+
+      <!-- Latest message -->
+      <div class="sec-title">Latest Instruction</div>
+      <div id="latest-msg">
+        <div class="msg-card" style="color:var(--muted)">No instructions yet</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-messages" class="page">
+    <div class="content">
+      <div class="sec-title">All Instructions</div>
+      <div id="all-msgs"></div>
+    </div>
+  </div>
+
+  <div id="page-profile" class="page">
+    <div class="content">
+      <div class="card">
+        <div class="sec-title">My Profile</div>
+        <div id="profile-info" style="font-size:14px;line-height:2"></div>
+      </div>
+      <button class="btn btn-outline" onclick="doLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- Bottom nav -->
+  <div class="bottom-nav">
+    <div class="nav-btn active" onclick="switchPage('home',this)">
+      <span class="nav-icon">🏠</span>Home
+    </div>
+    <div class="nav-btn" onclick="switchPage('messages',this)">
+      <span class="nav-icon">📨</span>Messages
+    </div>
+    <div class="nav-btn" onclick="switchPage('profile',this)">
+      <span class="nav-icon">👤</span>Profile
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let token = null, myId = null, myName = null, myAreaId = null;
+let ws = null;
+let areaStatus = 'open';
+let currentDensity = 0;
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+
+function showTab(t) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    b.classList.toggle('active', (i===0 && t==='login')||(i===1 && t==='register'));
+  });
+  document.getElementById('login-form').style.display    = t==='login'    ? '' : 'none';
+  document.getElementById('register-form').style.display = t==='register' ? '' : 'none';
+}
+
+function switchPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (name === 'messages') loadMessages();
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+
+async function doLogin() {
+  const r = await fetch(`${API}/auth/login`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ username: document.getElementById('l-email').value,
+                           password: document.getElementById('l-pass').value,
+                           role: 'volunteer' })
+  });
+  const d = await r.json();
+  if (!r.ok) { document.getElementById('login-err').textContent = d.detail; return; }
+  initSession(d);
+}
+
+async function doRegister() {
+  const r = await fetch(`${API}/auth/register`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      name: document.getElementById('r-name').value,
+      email: document.getElementById('r-email').value,
+      phone: document.getElementById('r-phone').value,
+      password: document.getElementById('r-pass').value
+    })
+  });
+  const d = await r.json();
+  if (!r.ok) { document.getElementById('reg-err').textContent = d.detail; return; }
+  document.getElementById('reg-err').style.color = 'green';
+  document.getElementById('reg-err').textContent = 'Registered! Please sign in.';
+  showTab('login');
+}
+
+function initSession(d) {
+  token = d.token; myId = d.id; myName = d.name; myAreaId = d.area_id;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('tb-name').textContent = myName;
+  document.getElementById('tb-area').textContent = myAreaId ? `Area: ${myAreaId.slice(0,8)}...` : 'Awaiting assignment';
+  document.getElementById('stat-area').textContent = '...';
+  loadProfile();
+  connectWS();
+  loadMessages();
+}
+
+function doLogout() {
+  token = null; myId = null;
+  if (ws) ws.close();
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────
+
+function connectWS() {
+  if (!token || !myId) return;
+  ws = new WebSocket(`ws://localhost:8000/ws/volunteer/${myId}/${token}`);
+  ws.onopen = () => {
+    document.getElementById('ws-dot').classList.add('on');
+  };
+  ws.onclose = () => {
+    document.getElementById('ws-dot').classList.remove('on');
+    setTimeout(connectWS, 3000);
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleWS(msg);
+  };
+}
+
+function handleWS(msg) {
+  if (msg.type === 'instruction') {
+    areaStatus = msg.area_status;
+    const urgent = msg.action === 'close_area';
+    showInstruction(msg.message, urgent);
+    updateStatusCard();
+    loadMessages();
+
+    // Vibrate if supported
+    if (urgent && navigator.vibrate) navigator.vibrate([200,100,200,100,400]);
+  } else if (msg.type === 'area_assigned') {
+    myAreaId = msg.area_id;
+    document.getElementById('tb-area').textContent = `Assigned to area`;
+    loadProfile();
+  }
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────
+
+async function loadProfile() {
+  const r = await fetch(`${API}/volunteers/me`, { headers:{ 'Authorization': `Bearer ${token}` } });
+  const d = await r.json();
+  myAreaId = d.area_id;
+  const areaName = d.area_name || 'Not assigned';
+  document.getElementById('tb-area').textContent = areaName;
+  document.getElementById('stat-area').textContent = areaName;
+  areaStatus = d.area_status || 'open';
+  updateStatusCard();
+  document.getElementById('profile-info').innerHTML = `
+    <b>Name:</b> ${d.name}<br>
+    <b>Email:</b> ${d.email}<br>
+    <b>Phone:</b> ${d.phone || '—'}<br>
+    <b>Area:</b> ${areaName}<br>
+    <b>Status:</b> ${d.status}
+  `;
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────
+
+async function loadMessages() {
+  const r = await fetch(`${API}/messages/me`, { headers:{ 'Authorization': `Bearer ${token}` } });
+  const msgs = await r.json();
+  renderMessages(msgs);
+}
+
+function renderMessages(msgs) {
+  const allEl   = document.getElementById('all-msgs');
+  const latestEl= document.getElementById('latest-msg');
+  if (!msgs.length) {
+    allEl.innerHTML = '<div class="msg-card" style="color:var(--muted)">No messages yet</div>';
+    latestEl.innerHTML = '<div class="msg-card" style="color:var(--muted)">No instructions yet</div>';
+    return;
+  }
+  const cards = msgs.map(m => {
+    const urgent = m.content.includes('URGENT') || m.content.includes('close');
+    const safe   = m.content.includes('safe') || m.content.includes('Open');
+    return `<div class="msg-card ${urgent?'msg-urgent':''} ${safe?'msg-safe':''}">
+      ${m.content}
+      <div class="msg-meta">${new Date(m.created_at).toLocaleString()}</div>
+    </div>`;
+  }).join('');
+  allEl.innerHTML = cards;
+  latestEl.innerHTML = `<div class="msg-card ${msgs[0].content.includes('close')||msgs[0].content.includes('URGENT')?'msg-urgent':'msg-safe'}">
+    ${msgs[0].content}
+    <div class="msg-meta">${new Date(msgs[0].created_at).toLocaleString()}</div>
+  </div>`;
+}
+
+function showInstruction(text, urgent) {
+  document.getElementById('latest-msg').innerHTML = `
+    <div class="msg-card ${urgent?'msg-urgent':'msg-safe'}">${text}
+      <div class="msg-meta">Just now</div>
+    </div>`;
+}
+
+// ── Status Card ───────────────────────────────────────────────────────────
+
+function updateStatusCard() {
+  const card = document.getElementById('status-card');
+  const emoji= document.getElementById('status-emoji');
+  const txt  = document.getElementById('status-text');
+  const sub  = document.getElementById('status-sub');
+  const actions = document.getElementById('action-area');
+
+  card.className = 'status-card';
+  actions.innerHTML = '';
+
+  if (areaStatus === 'closed') {
+    card.classList.add('closed');
+    emoji.textContent = '⛔';
+    txt.textContent = 'Area Closed';
+    sub.textContent = 'Redirect crowd. Do not allow entry.';
+    actions.innerHTML = `<button class="btn btn-green" onclick="reportSafe()">Report Area Safe</button>`;
+  } else if (areaStatus === 'risk' || currentDensity > 4) {
+    card.classList.add('risk');
+    emoji.textContent = '🚨';
+    txt.textContent = 'High Risk Detected';
+    sub.textContent = 'Awaiting admin instruction';
+  } else {
+    card.classList.add('ok');
+    emoji.textContent = '✅';
+    txt.textContent = 'Area Safe';
+    sub.textContent = 'Continue normal monitoring';
+  }
+}
+
+async function reportSafe() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    alert('Not connected. Try again.');
+    return;
+  }
+  ws.send(JSON.stringify({ type: 'area_safe_confirmed' }));
+  alert('✅ Safe report sent to admin. Awaiting approval to reopen.');
+}
+</script>
+</body>
+</html>
