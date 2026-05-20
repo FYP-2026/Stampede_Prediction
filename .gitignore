@@ -23,7 +23,6 @@ models/*.pt
 
 # Outputs
 outputs/
-*.mp4
 *.avi
 
 # IDE
@@ -40,5 +39,5 @@ Thumbs.db
 *.ipynb
 
 # Logs
-*.log
-*.jpg
+
+activation_script.txt
