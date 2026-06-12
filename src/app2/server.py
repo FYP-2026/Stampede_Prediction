@@ -33,9 +33,29 @@ try:
     import cv2
     import numpy as np
     import tensorflow as tf
+    import matplotlib.pyplot as _plt
     HAS_INFERENCE = True
 except ImportError:
     HAS_INFERENCE = False
+
+# ── Compiled inference helper ─────────────────────────────────────────────────
+
+def _make_inference_fn(model, image_size):
+    """
+    Returns a @tf.function-compiled inference callable.
+    Threshold is NOT baked in so hot-reloaded values take effect immediately;
+    it is applied in NumPy after the call.
+    """
+    h, w = image_size
+
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=(1, h, w, 3), dtype=tf.float32)
+    ])
+    def infer(img_batch):
+        pred = model(img_batch, training=False)
+        return pred[0, ..., 0]   # (H, W)
+
+    return infer
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
@@ -244,102 +264,168 @@ class InferenceWorker:
         cell_h = IH // GR
         cell_w = IW // GC
 
-        last_push  = 0.0
-        frame_t    = time.time()
+        # ── Compile TF graph once (warm-up with a dummy batch) ────────────────
+        infer = _make_inference_fn(model, self.IMAGE_SIZE)
+        infer(tf.zeros((1, IH, IW, 3), dtype=tf.float32))
 
-        while not self._stop.is_set():
-            ret, frame = cap.read()
-            if not ret:
-                # For video files: loop; for live cameras: error
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        # ── Precompute vectorised grid index arrays ───────────────────────────
+        cell_y0 = (np.arange(GR) * cell_h).astype(np.int32)
+        cell_x0 = (np.arange(GC) * cell_w).astype(np.int32)
+        cell_y1 = cell_y0 + cell_h
+        cell_x1 = cell_x0 + cell_w
+
+        # ── Colormap LUT (hot palette, 256 entries) ───────────────────────────
+        try:
+            _cmap_lut = (_plt.get_cmap("hot")(np.linspace(0, 1, 256))[..., :3] * 255
+                         ).astype(np.uint8)
+        except Exception:
+            # Fallback: black → red → yellow gradient
+            _cmap_lut = np.zeros((256, 3), dtype=np.uint8)
+            _cmap_lut[:128, 0] = np.linspace(0, 255, 128, dtype=np.uint8)
+            _cmap_lut[128:, 0] = 255
+            _cmap_lut[128:, 1] = np.linspace(0, 255, 128, dtype=np.uint8)
+
+        # ── Pre-allocated per-frame buffers (zero heap churn) ─────────────────
+        img_batch  = np.empty((1, IH, IW, 3), dtype=np.float32)
+        lut_idx    = np.empty((IH, IW),        dtype=np.uint8)
+        _scale_buf = np.empty((IH, IW),        dtype=np.float32)
+
+        # ── Inter-thread queues ───────────────────────────────────────────────
+        # maxsize=2: capture can't flood inference; inference can't flood push.
+        capture_q  = queue.Queue(maxsize=2)
+        last_push  = [0.0]   # list so the closure can mutate it
+
+        # ── Thread A: Capture ─────────────────────────────────────────────────
+        def _capture():
+            while not self._stop.is_set():
                 ret, frame = cap.read()
                 if not ret:
-                    break
+                    # Loop video files; treat live-camera EOF as a hard stop.
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    ret, frame = cap.read()
+                    if not ret:
+                        self._stop.set()
+                        break
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame_rgb = cv2.resize(frame_rgb, (IW, IH))
+                try:
+                    capture_q.put(frame_rgb, timeout=0.1)
+                except queue.Full:
+                    pass   # drop frame rather than stall
 
-            # Refresh area config from DB so live threshold changes take effect
-            now = time.time()
-            elapsed = now - frame_t
-            self.fps = round(1.0 / max(elapsed, 1e-6), 1)
-            frame_t = now
+        # ── Thread B: Inference + annotation + push ───────────────────────────
+        def _inference():
+            frame_t = time.time()
+            while not self._stop.is_set():
+                try:
+                    frame_rgb = capture_q.get(timeout=0.1)
+                except queue.Empty:
+                    continue
 
-            # Preprocess
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_rgb = cv2.resize(frame_rgb, (IW, IH))
-            img_batch = (frame_rgb / 255.0)[np.newaxis, ...].astype(np.float32)
+                now = time.time()
+                self.fps = round(1.0 / max(now - frame_t, 1e-6), 1)
+                frame_t  = now
 
-            # Predict
-            pred_threshold = float(self._area.get("pred_threshold", 0.3))
-            pred_map = model(img_batch, training=False).numpy()[0, ..., 0]
-            pred_map[pred_map < pred_threshold] = 0
-            total_count = float(pred_map.sum())
+                # Read latest hot-reloaded config
+                pred_threshold    = float(self._area.get("pred_threshold",    0.3))
+                density_threshold = float(self._area.get("density_threshold", 4.0))
+                alpha             = float(self._area.get("alpha",             0.5))
+                scene_w           = float(self._area.get("scene_width_m",    20.0))
+                scene_h           = float(self._area.get("scene_height_m",   20.0))
 
-            # Grid density
-            scene_w = float(self._area.get("scene_width_m", 20.0))
-            scene_h = float(self._area.get("scene_height_m", 20.0))
-            mppx = scene_w / IW
-            mppy = scene_h / IH
-            cell_area_m2 = (cell_h * mppy) * (cell_w * mppx)
-            threshold = float(self._area.get("density_threshold", 4.0))
+                # Preprocess into pre-allocated buffer (no new allocation)
+                np.multiply(frame_rgb, 1.0 / 255.0, out=img_batch[0])
 
-            grid_flags = []
-            for row in range(GR):
-                for col in range(GC):
-                    y0, y1 = row * cell_h, (row + 1) * cell_h
-                    x0, x1 = col * cell_w, (col + 1) * cell_w
-                    cell_count   = float(pred_map[y0:y1, x0:x1].sum())
-                    cell_density = cell_count / cell_area_m2
-                    if cell_density >= threshold:
-                        grid_flags.append({
-                            "row": row, "col": col,
-                            "density": round(cell_density, 2)
-                        })
+                # Infer (compiled graph) then apply threshold in NumPy so
+                # hot-reloaded values take effect without recompiling the graph
+                pred_map = infer(img_batch).numpy()
+                pred_map[pred_map < pred_threshold] = 0.0
+                total_count = float(pred_map.sum())
 
-            max_density = max((f["density"] for f in grid_flags), default=0.0)
-            self.last_count   = round(total_count, 1)
-            self.last_density = round(max_density, 2)
+                # ── Heatmap overlay (LUT path, no per-pixel Python) ───────────
+                vmax = float(pred_map.max()) or 1e-6
+                np.multiply(pred_map, 255.0 / vmax, out=_scale_buf)
+                np.clip(_scale_buf, 0, 255, out=_scale_buf)
+                np.copyto(lut_idx, _scale_buf, casting='unsafe')
+                heatmap_rgb = _cmap_lut[lut_idx]
+                overlay = cv2.addWeighted(frame_rgb, 1.0 - alpha,
+                                          heatmap_rgb, alpha, 0)
 
-            # ── Encode annotated frame for MJPEG streaming ─────────────────────
-            try:
-                display = frame_rgb.copy()
-                # Draw grid overlay: red cells where density >= threshold
-                threshold = float(self._area.get("density_threshold", 4.0))
-                flagged = {(f["row"], f["col"]) for f in grid_flags}
-                for row in range(self.GRID_ROWS):
-                    for col in range(self.GRID_COLS):
-                        y0, y1 = row * cell_h, (row + 1) * cell_h
-                        x0, x1 = col * cell_w, (col + 1) * cell_w
-                        if (row, col) in flagged:
-                            overlay = display.copy()
-                            cv2.rectangle(overlay, (x0, y0), (x1, y1), (220, 50, 50), -1)
-                            display = cv2.addWeighted(overlay, 0.35, display, 0.65, 0)
-                        cv2.rectangle(display, (x0, y0), (x1, y1), (60, 70, 100), 1)
-                # Overlay count / density text
-                label = f"Count:{self.last_count}  Density:{self.last_density}/m2  FPS:{self.fps}"
-                cv2.rectangle(display, (0, 0), (IW, 22), (10, 12, 20), -1)
-                cv2.putText(display, label, (6, 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 210, 240), 1, cv2.LINE_AA)
-                # RGB → BGR for imencode
-                bgr = cv2.cvtColor(display, cv2.COLOR_RGB2BGR)
-                ok, buf = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 70])
-                if ok:
-                    jpeg_bytes = buf.tobytes()
-                    try:
-                        self.frame_queue.get_nowait()   # discard stale frame
-                    except queue.Empty:
-                        pass
-                    self.frame_queue.put_nowait(jpeg_bytes)
-            except Exception:
-                pass  # never let display errors kill the inference loop
+                # ── Vectorised grid density (single reshape + sum, no loop) ───
+                cell_area_m2 = ((cell_h * scene_h / IH) *
+                                (cell_w * scene_w / IW))
+                grid = (pred_map
+                        .reshape(GR, cell_h, GC, cell_w)
+                        .sum(axis=(1, 3)) / cell_area_m2)          # (GR, GC)
 
-            push_interval = float(self._area.get("push_interval", 1.0))
-            if now - last_push >= push_interval:
-                last_push = now
-                # push_fn is called from a thread — use asyncio.run_coroutine_threadsafe
-                asyncio.run_coroutine_threadsafe(
-                    self.push_fn(self.area_id, total_count, max_density, grid_flags),
-                    _loop
-                )
+                flagged_mask = grid >= density_threshold
+                any_flagged  = bool(flagged_mask.any())
 
+                grid_flags = []
+                for row, col in zip(*np.where(flagged_mask)):
+                    row, col = int(row), int(col)
+                    y0_, x0_ = int(cell_y0[row]), int(cell_x0[col])
+                    y1_, x1_ = int(cell_y1[row]), int(cell_x1[col])
+                    density  = float(grid[row, col])
+                    grid_flags.append({"row": row, "col": col,
+                                       "density": round(density, 2)})
+                    cv2.rectangle(overlay, (x0_, y0_), (x1_, y1_),
+                                  (255, 0, 0), 2)
+                    cv2.putText(overlay, f"{density:.1f}/m\u00b2",
+                                org=(x0_ + 4, y0_ + 20),
+                                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                                fontScale=0.45, color=(255, 0, 0),
+                                thickness=1, lineType=cv2.LINE_AA)
+
+                max_density       = max((f["density"] for f in grid_flags), default=0.0)
+                self.last_count   = round(total_count, 1)
+                self.last_density = round(max_density, 2)
+
+                # ── HUD ───────────────────────────────────────────────────────
+                status_text  = "!! OVERCROWDED !!" if any_flagged else "OK"
+                status_color = (255, 0, 0)         if any_flagged else (0, 255, 0)
+                cv2.putText(overlay, f"Count: {total_count:.1f}",
+                            (15, 35), cv2.FONT_HERSHEY_SIMPLEX,
+                            1.0, (255, 80, 0), 2, cv2.LINE_AA)
+                cv2.putText(overlay, f"FPS: {self.fps}",
+                            (15, 65), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.6, (200, 200, 200), 1, cv2.LINE_AA)
+                cv2.putText(overlay, status_text,
+                            (15, 100), cv2.FONT_HERSHEY_SIMPLEX,
+                            1.0, status_color, 2, cv2.LINE_AA)
+
+                # ── Encode JPEG for MJPEG stream ──────────────────────────────
+                try:
+                    bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
+                    ok, buf = cv2.imencode(".jpg", bgr,
+                                          [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    if ok:
+                        jpeg_bytes = buf.tobytes()
+                        try:
+                            self.frame_queue.get_nowait()   # evict stale frame
+                        except queue.Empty:
+                            pass
+                        self.frame_queue.put_nowait(jpeg_bytes)
+                except Exception:
+                    pass   # never let display errors kill the inference loop
+
+                # ── Push metrics at configured interval ───────────────────────
+                push_interval = float(self._area.get("push_interval", 1.0))
+                if now - last_push[0] >= push_interval:
+                    last_push[0] = now
+                    asyncio.run_coroutine_threadsafe(
+                        self.push_fn(self.area_id, total_count,
+                                     max_density, grid_flags),
+                        _loop
+                    )
+
+        # ── Launch threads; _run itself blocks until both finish ──────────────
+        t_capture   = threading.Thread(target=_capture,   daemon=True)
+        t_inference = threading.Thread(target=_inference, daemon=True)
+        t_capture.start()
+        t_inference.start()
+        t_capture.join()
+        t_inference.join()
         cap.release()
         if self.status != "stopped":
             self.status = "stopped"

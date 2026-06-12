@@ -142,3 +142,4 @@ predict_video(model, source='concert_crowd.mp4', alpha=0.6, pred_threshold=0.2,
               density_threshold=4.0,
               scene_width_m=30.0,
               scene_height_m=30.0)
+
