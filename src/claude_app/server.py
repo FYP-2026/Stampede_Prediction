@@ -882,8 +882,8 @@ async def video_stream(area_id: str):
                     None, lambda: worker.frame_queue.get(timeout=0.2)
                 )
             except queue.Empty:
-                # send an empty comment to keep the TCP connection alive
-                yield boundary + b"\r\n\r\n"
+                # Do not yield corrupt boundary headers; just continue waiting for the next frame
+                await asyncio.sleep(0.05)
                 continue
             yield (
                 boundary + b"\r\n"

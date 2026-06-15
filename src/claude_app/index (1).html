@@ -1000,7 +1000,7 @@ function selectArea(id) {
   updateVideoPanel(a);
 }
 
-function updateVideoPanel(a) {
+function updateVideoPanel(a, forceReload = false) {
   const img         = document.getElementById('video-feed');
   const placeholder = document.getElementById('video-placeholder');
   const nameEl      = document.getElementById('video-area-name');
@@ -1020,8 +1020,8 @@ function updateVideoPanel(a) {
 
   // Worker is running — point img at MJPEG endpoint
   const url = `http://localhost:8000/video/${a.id}`;
-  if (img.src !== url) {
-    img.src = url;          // triggers browser MJPEG streaming
+  if (img.src !== url || forceReload) {
+    img.src = forceReload ? `${url}?t=${Date.now()}` : url;          // triggers browser MJPEG streaming
   }
   img.style.display         = 'block';
   placeholder.style.display = 'none';
@@ -1035,6 +1035,15 @@ function onVideoError() {
   img.style.display = 'none';
   placeholder.style.display = 'flex';
   placeholder.innerHTML = '<div class="ph-icon">⚠</div><div>Feed unavailable — is the worker running?</div>';
+
+  if (selectedAreaId) {
+    setTimeout(() => {
+      const a = areas[selectedAreaId];
+      if (a && a.worker_status === 'running') {
+        updateVideoPanel(a, true);
+      }
+    }, 1500);
+  }
 }
 
 function onVideoLoad() {
