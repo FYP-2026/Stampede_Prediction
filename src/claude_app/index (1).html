@@ -600,6 +600,22 @@ select option { background: var(--bg3); }
   </div>
 </div>
 
+<!-- Open Area Modal -->
+<div class="modal-overlay" id="open-area-modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <h2>🔓 Reopen Area?</h2>
+      <button class="modal-close" onclick="closeOpenAreaModal()">✕</button>
+    </div>
+    <div id="open-area-modal-body"
+         style="font-size:14px;color:var(--muted2);line-height:1.7;margin-bottom:20px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="holdOpenArea()">Hold — Keep Closed</button>
+      <button class="btn btn-safe" id="open-area-confirm-btn">🔓 Open Area</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div id="toast-root"></div>
 
@@ -694,6 +710,12 @@ function handleWS(msg) {
       showToast(`✅ ${msg.area_name} reported safe`, 'ok');
     }
     addPendingAlert(msg); renderAlerts();
+  } else if (msg.type === 'density_safe') {
+    addPendingAlert(msg);
+    renderAlerts();
+    showOpenAreaModal(msg.alert_id, msg.area_name, msg.density);
+    addLog(msg.area_id,
+           `✅ Density dropped to <b>${msg.density}/m²</b> — area eligible to reopen`);
   } else if (msg.type === 'area_status_changed') {
     loadAreas();
   }
@@ -870,11 +892,19 @@ function renderAlerts() {
   if (!items.length) { pending.innerHTML = '<div style="color:var(--muted);font-size:12px">All clear</div>'; return; }
   items.forEach(a => {
     const isRisk = a.alert_type === 'risk_detected';
-    const isSafe = a.alert_type === 'safe_report' || a.alert_type === 'safe_reported';
+    const isSafe = a.alert_type === 'safe_report'
+                || a.alert_type === 'safe_reported'
+                || a.alert_type === 'density_safe';
     let btns = '';
-    if (isRisk && !a.admin_approved) {
+    const areaIsClosed = areas[a.area_id]?.status === 'closed';
+    if (isRisk && !a.admin_approved && !areaIsClosed) {
       btns = `<div class="alert-btns">
         <button class="btn btn-sm" onclick="approveAlert('${a.id}','close_area')">🔒 Close Area</button>
+        <button class="btn btn-sm btn-ghost" onclick="dismissAlert('${a.id}')">Dismiss</button>
+      </div>`;
+    } else if (isRisk && !a.admin_approved && areaIsClosed) {
+      btns = `<div class="alert-btns">
+        <span style="font-size:11px;color:var(--warn);font-family:var(--mono)">🔒 Area already closed</span>
         <button class="btn btn-sm btn-ghost" onclick="dismissAlert('${a.id}')">Dismiss</button>
       </div>`;
     } else if (isSafe) {
@@ -1033,10 +1063,33 @@ function updateGridFromFlags(areaId, flags) {
   });
 }
 
+function showOpenAreaModal(alertId, areaName, density) {
+  document.getElementById('open-area-modal-body').innerHTML =
+    `Density in <b>${areaName}</b> has dropped to <b>${density}/m²</b>, `
+    + `below the configured threshold.<br><br>`
+    + `Reopen the area and notify assigned volunteers?`;
+  document.getElementById('open-area-confirm-btn').onclick = () => {
+    closeOpenAreaModal();
+    approveAlert(alertId, 'open_area');
+  };
+  document.getElementById('open-area-modal').classList.add('open');
+}
+
+function closeOpenAreaModal() {
+  document.getElementById('open-area-modal').classList.remove('open');
+}
+
+function holdOpenArea() {
+  closeOpenAreaModal();
+  showToast('Area kept closed — use Pending Actions panel to reopen later', '');
+}
+
 function addPendingAlert(msg) {
   pendingAlerts[msg.alert_id] = {
     id: msg.alert_id, area_id: msg.area_id, area_name: msg.area_name,
-    alert_type: msg.type==='safe_report'?'safe_reported':'risk_detected',
+    alert_type: msg.type==='safe_report' ? 'safe_reported'
+               : msg.type==='density_safe' ? 'density_safe'
+               : 'risk_detected',
     density: msg.density, count: msg.count,
     created_at: msg.timestamp||new Date().toISOString(), admin_approved:0
   };
