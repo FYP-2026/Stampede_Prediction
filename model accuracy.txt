@@ -1,5 +1,0 @@
-with dropout
-accuracy: 0.9287 - loss: 0.1887 - val_accuracy: 0.9533 - val_loss: 0.1872
-
-without dropout
-accuracy: 0.9222 - loss: 0.2065 - val_accuracy: 0.9707 - val_loss: 0.1309

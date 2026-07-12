@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stampede EWS v2 — Command Centre</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #07080a;
+  --bg2:       #0d0f14;
+  --bg3:       #12151c;
+  --bg4:       #181c26;
+  --border:    #1c2030;
+  --border2:   #242a3a;
+  --text:      #dde2f0;
+  --muted:     #4a526e;
+  --muted2:    #6a7490;
+  --accent:    #e8394a;
+  --accent2:   #ff6b35;
+  --safe:      #1fd286;
+  --warn:      #f0a500;
+  --info:      #4580f5;
+  --purple:    #9b59f5;
+  --mono:      'IBM Plex Mono', monospace;
+  --sans:      'Space Grotesk', sans-serif;
+  --r:         10px;
+  --r-sm:      6px;
+}
+
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow: hidden; }
+
+/* ── Noise texture overlay ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 1000;
+}
+
+/* ── Login ── */
+#login-screen, #register-screen {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at 30% 50%, #0f1520 0%, var(--bg) 70%);
+}
+#register-screen { display: none; }
+.login-card {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 52px 48px;
+  width: 400px;
+  box-shadow: 0 40px 80px #00000080;
+}
+.login-logo {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 36px;
+}
+.logo-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.login-card h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+.login-card .sub { color: var(--muted2); font-size: 12px; font-family: var(--mono); margin-top: 2px; }
+
+label { display: block; font-size: 11px; font-weight: 600; color: var(--muted2); margin-bottom: 7px; letter-spacing: 0.8px; text-transform: uppercase; }
+
+input[type=text], input[type=password], input[type=number], input[type=email], select {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: var(--r-sm); padding: 11px 14px; color: var(--text);
+  font-family: var(--mono); font-size: 13px; outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input:focus, select:focus { border-color: var(--info); box-shadow: 0 0 0 3px #4580f520; }
+select option { background: var(--bg3); }
+
+.form-row { margin-bottom: 18px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  background: var(--accent); color: #fff; border: none; border-radius: var(--r-sm);
+  padding: 11px 20px; font-family: var(--sans); font-weight: 600; font-size: 13px;
+  cursor: pointer; letter-spacing: 0.2px; transition: opacity 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+.btn:hover { opacity: 0.88; transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn-block { display: flex; width: 100%; }
+.btn-ghost { background: var(--bg4); color: var(--text); border: 1px solid var(--border2); }
+.btn-safe  { background: var(--safe); color: #000; }
+.btn-info  { background: var(--info); }
+.btn-warn  { background: var(--warn); color: #000; }
+.btn-sm { padding: 7px 13px; font-size: 12px; }
+.btn-xs { padding: 4px 9px; font-size: 11px; border-radius: 4px; }
+
+.err { color: var(--accent); font-size: 12px; margin-top: 8px; font-family: var(--mono); }
+
+/* ── App shell ── */
+#app { display: none; flex-direction: column; height: 100vh; overflow: hidden; }
+
+/* Header */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; height: 52px; min-height: 52px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  flex-shrink: 0;
+}
+.hdr-left { display: flex; align-items: center; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+.brand-tag { font-family: var(--mono); font-size: 10px; color: var(--muted); background: var(--bg3); padding: 2px 8px; border-radius: 4px; }
+
+.nav-tabs { display: flex; gap: 2px; }
+.nav-tab {
+  padding: 6px 16px; border-radius: 6px; font-size: 13px; font-weight: 500;
+  cursor: pointer; color: var(--muted2); transition: all 0.15s;
+  border: none; background: none;
+}
+.nav-tab:hover { color: var(--text); background: var(--bg3); }
+.nav-tab.active { color: var(--text); background: var(--bg3); }
+
+.hdr-right { display: flex; align-items: center; gap: 10px; }
+.ws-pill {
+  font-family: var(--mono); font-size: 10px; padding: 4px 10px;
+  border-radius: 20px; border: 1px solid var(--border2); background: var(--bg3);
+}
+.ws-pill.ok  { color: var(--safe); border-color: #1fd28630; }
+.ws-pill.bad { color: var(--accent); border-color: #e8394a30; }
+
+/* ── Tab pages ── */
+.page { display: none; flex: 1; overflow: hidden; }
+.page.active { display: flex; }
+
+/* ── Live Monitor (3-col) ── */
+.monitor-layout {
+  display: grid; grid-template-columns: 280px 1fr 320px 320px;
+  width: 100%; overflow: hidden;
+}
+.panel { overflow-y: auto; padding: 18px; border-right: 1px solid var(--border); }
+.panel:last-child { border-right: none; }
+
+/* Video panel */
+#video-panel { display: flex; flex-direction: column; gap: 10px; }
+#video-feed {
+  width: 100%; aspect-ratio: 4/3; object-fit: cover;
+  border-radius: var(--r); background: #000;
+  border: 1px solid var(--border2);
+}
+#video-placeholder {
+  width: 100%; aspect-ratio: 4/3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--bg3); border-radius: var(--r); border: 1px dashed var(--border2);
+  color: var(--muted); font-size: 12px; gap: 8px;
+}
+#video-placeholder .ph-icon { font-size: 32px; opacity: 0.4; }
+#video-meta { font-family: var(--mono); font-size: 10px; color: var(--muted2); }
+
+.sec-hd {
+  font-size: 10px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 14px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Area cards */
+.area-card {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 14px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s;
+  position: relative; overflow: hidden;
+}
+.area-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--muted); transition: background 0.15s;
+}
+.area-card:hover { border-color: var(--border2); }
+.area-card.selected { border-color: var(--info); }
+.area-card.selected::before { background: var(--info); }
+.area-card.risk { border-color: #e8394a50; }
+.area-card.risk::before { background: var(--accent); }
+.area-card.risk { animation: glow 2s infinite; }
+@keyframes glow { 0%,100%{box-shadow:0 0 0 0 #e8394a00} 50%{box-shadow:0 0 12px 2px #e8394a18} }
+
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; margin-left: 6px; }
+.area-name { font-size: 14px; font-weight: 600; }
+.area-cam  { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-left: 6px; margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.area-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-left: 6px; }
+.stat { background: var(--bg2); border-radius: var(--r-sm); padding: 7px 10px; }
+.stat-l { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+.stat-v { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+.stat-v.ok  { color: var(--safe); }
+.stat-v.bad { color: var(--accent); }
+
+.worker-bar {
+  display: flex; align-items: center; gap: 6px; margin-left: 6px;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+}
+.w-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.w-dot.running { background: var(--safe); }
+.w-dot.stopped { background: var(--muted); }
+.w-dot.error   { background: var(--accent); }
+.w-dot.loading { background: var(--warn); animation: blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.w-status { font-family: var(--mono); font-size: 10px; color: var(--muted2); flex: 1; }
+.w-controls { display: flex; gap: 4px; }
+
+/* Badge */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-family: var(--mono); font-weight: 600;
+  padding: 2px 8px; border-radius: 20px;
+}
+.badge-ok     { background: #1fd28615; color: var(--safe); }
+.badge-risk   { background: #e8394a15; color: var(--accent); }
+.badge-closed { background: #f0a50015; color: var(--warn); }
+.badge-run    { background: #4580f515; color: var(--info); }
+
+/* Grid */
+.density-grid {
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin-top: 10px;
+}
+.cell {
+  aspect-ratio: 1; border-radius: 3px;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.cell.ok   { background: #1c2030; }
+.cell.risk { background: #e8394a50; box-shadow: inset 0 0 4px #e8394a40; }
+
+/* Alert cards */
+.alert-card {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 14px; margin-bottom: 10px;
+  border-left: 3px solid var(--accent);
+}
+.alert-card.safe-r { border-left-color: var(--safe); }
+.alert-hd { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.alert-title { font-size: 13px; font-weight: 600; }
+.alert-time  { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.alert-body  { font-size: 12px; color: var(--muted2); margin-bottom: 12px; line-height: 1.5; }
+.alert-btns  { display: flex; gap: 8px; }
+
+/* Log */
+.log-item { font-family: var(--mono); font-size: 11px; padding: 6px 0; border-bottom: 1px solid var(--border); line-height: 1.5; }
+
+/* ── Feeds tab ── */
+.feeds-layout { display: flex; flex-direction: column; width: 100%; padding: 20px; overflow-y: auto; gap: 20px; }
+
+.section-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+}
+.section-card-hd {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13px; font-weight: 600;
+}
+.section-card-body { padding: 20px; }
+
+/* New area form */
+.form-label-group { margin-bottom: 14px; }
+.hint { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+
+/* Workers table */
+.workers-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.workers-table th {
+  text-align: left; padding: 8px 12px; font-size: 10px; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 600;
+}
+.workers-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.workers-table tr:last-child td { border-bottom: none; }
+.workers-table tr:hover td { background: var(--bg3); }
+.font-mono { font-family: var(--mono); }
+
+/* ── Volunteers tab ── */
+.vols-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; padding: 20px; overflow-y: auto; width: 100%; }
+
+.vol-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r);
+  margin-bottom: 8px;
+}
+.vol-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--info), var(--purple));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+}
+.vol-info { flex: 1; }
+.vol-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.vol-email { font-family: var(--mono); font-size: 10px; color: var(--muted2); }
+.vol-status { font-family: var(--mono); font-size: 10px; }
+
+/* ── Login role tabs / register link ── */
+.role-tabs { display: flex; gap: 6px; margin-bottom: 24px; background: var(--bg3); padding: 4px; border-radius: 10px; }
+.role-tab { flex: 1; text-align: center; padding: 9px 0; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--muted2); transition: all 0.15s; }
+.role-tab.active { background: var(--accent); color: #fff; }
+.login-link { text-align: center; margin-top: 18px; font-size: 12px; color: var(--muted2); }
+.login-link a { color: var(--info); cursor: pointer; text-decoration: none; }
+.login-link a:hover { text-decoration: underline; }
+
+/* ── Volunteer dashboard ── */
+#volunteer-app { display: none; flex-direction: column; height: 100vh; overflow-y: auto; }
+.vol-main { max-width: 640px; margin: 0 auto; width: 100%; padding: 32px 24px; }
+.vol-banner {
+  border-radius: 18px; padding: 36px 28px; text-align: center; margin-bottom: 24px;
+  border: 1px solid var(--border2); background: var(--bg2); transition: background 0.3s, border-color 0.3s;
+}
+.vol-banner .vb-icon { font-size: 40px; margin-bottom: 12px; }
+.vol-banner .vb-title { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.vol-banner .vb-sub { font-size: 13px; color: var(--muted2); font-family: var(--mono); }
+.vol-banner.standby { border-color: var(--border2); }
+.vol-banner.open     { border-color: #1fd28650; background: #0d1a15; }
+.vol-banner.closed   { border-color: #e8394a50; background: #1a0d10; animation: glow 2s infinite; }
+.vol-area-meta { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+.msg-item {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 12px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.5;
+}
+.msg-time { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 6px; }
+
+/* ── Toast ── */
+#toast-root { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--r-sm);
+  padding: 12px 18px; font-size: 13px; font-weight: 500;
+  animation: slide-in 0.2s ease; max-width: 300px;
+  border-left: 3px solid var(--muted);
+}
+.toast.ok  { border-left-color: var(--safe); color: var(--safe); }
+.toast.err { border-left-color: var(--accent); color: var(--accent); }
+@keyframes slide-in { from { opacity:0; transform: translateX(20px); } to { opacity:1; transform: none; } }
+
+/* Modal */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: #00000080; z-index: 500;
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 16px;
+  padding: 28px; width: 520px; max-height: 85vh; overflow-y: auto;
+  box-shadow: 0 40px 80px #00000090;
+}
+.modal-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+.modal-hd h2 { font-size: 17px; font-weight: 700; }
+.modal-close { background: none; border: none; color: var(--muted2); font-size: 20px; cursor: pointer; line-height: 1; }
+.modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">🛡</div>
+      <div>
+        <div style="font-size:18px;font-weight:800;letter-spacing:-0.3px">Stampede EWS</div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">v2 · Command Centre</div>
+      </div>
+    </div>
+    <div class="role-tabs">
+      <div class="role-tab active" id="role-tab-admin" onclick="switchLoginRole('admin')">Admin</div>
+      <div class="role-tab" id="role-tab-volunteer" onclick="switchLoginRole('volunteer')">Volunteer</div>
+    </div>
+
+    <div id="admin-login-form">
+      <div class="form-row">
+        <label>Username</label>
+        <input type="text" id="l-user" value="admin" autocomplete="off">
+      </div>
+      <div class="form-row">
+        <label>Password</label>
+        <input type="password" id="l-pass" value="admin123">
+      </div>
+      <button class="btn btn-block" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <div id="volunteer-login-form" style="display:none">
+      <div class="form-row">
+        <label>Email</label>
+        <input type="email" id="v-user" placeholder="you@example.com" autocomplete="off">
+      </div>
+      <div class="form-row">
+        <label>Password</label>
+        <input type="password" id="v-pass" placeholder="••••••••">
+      </div>
+      <button class="btn btn-block" onclick="doLoginVolunteer()">Sign In</button>
+      <div class="login-link">New here? <a onclick="showRegister()">Register as a volunteer</a></div>
+    </div>
+
+    <div id="l-err" class="err"></div>
+  </div>
+</div>
+
+<!-- VOLUNTEER REGISTRATION -->
+<div id="register-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">🙋</div>
+      <div>
+        <div style="font-size:18px;font-weight:800;letter-spacing:-0.3px">Volunteer Registration</div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">Join the response team</div>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Full Name</label>
+      <input type="text" id="r-name" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label>Email</label>
+      <input type="email" id="r-email" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label>Phone (optional)</label>
+      <input type="text" id="r-phone" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label>Password</label>
+      <input type="password" id="r-pass">
+    </div>
+    <button class="btn btn-block btn-safe" onclick="doRegister()">Register</button>
+    <div class="login-link"><a onclick="hideRegister()">← Back to sign in</a></div>
+    <div id="r-err" class="err"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="hdr-left">
+      <div class="brand">
+        <div class="brand-dot"></div>
+        <span class="brand-name">Stampede EWS</span>
+        <span class="brand-tag">v2</span>
+      </div>
+      <div class="nav-tabs">
+        <button class="nav-tab active" onclick="switchTab('monitor')">Live Monitor</button>
+        <button class="nav-tab" onclick="switchTab('feeds')">Feeds & Cameras</button>
+        <button class="nav-tab" onclick="switchTab('volunteers')">Volunteers</button>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <span id="ws-indicator" class="ws-pill bad">● WS disconnected</span>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- ───────────── MONITOR TAB ───────────── -->
+  <div id="tab-monitor" class="page active">
+    <div class="monitor-layout" style="height:calc(100vh - 52px)">
+
+      <!-- LEFT: area list -->
+      <div class="panel">
+        <div class="sec-hd">Monitored Areas</div>
+        <div id="areas-list"></div>
+      </div>
+
+      <!-- MIDDLE-LEFT: live video feed -->
+      <div class="panel" style="border-right:1px solid var(--border)" id="video-panel">
+        <div class="sec-hd" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Live Feed <span id="video-area-name" style="color:var(--muted2)"></span></span>
+          <span id="video-status-badge"></span>
+        </div>
+        <!-- placeholder shown when no area selected or worker stopped -->
+        <div id="video-placeholder">
+          <div class="ph-icon">📷</div>
+          <div>Select a running area to view feed</div>
+        </div>
+        <!-- actual MJPEG img — hidden until worker is running -->
+        <img id="video-feed" src="" alt="Live camera feed" style="display:none"
+             onerror="onVideoError()" onload="onVideoLoad()">
+        <div id="video-meta"></div>
+      </div>
+
+      <!-- MIDDLE-RIGHT: grid + log -->
+      <div class="panel" style="border-right:1px solid var(--border)">
+        <div class="sec-hd" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Density Grid <span id="grid-area-name" style="color:var(--muted2)"></span></span>
+          <span id="cam-info" style="font-family:var(--mono);font-size:10px;color:var(--muted)"></span>
+        </div>
+        <div class="density-grid" id="density-grid">
+          <!-- 64 cells -->
+        </div>
+        <div style="margin-top:20px">
+          <div class="sec-hd">Activity Log</div>
+          <div id="activity-log"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: alerts -->
+      <div class="panel">
+        <div class="sec-hd">⚠ Pending Actions</div>
+        <div id="alerts-list"></div>
+        <div class="sec-hd" style="margin-top:20px">✅ Resolved</div>
+        <div id="resolved-list" style="color:var(--muted);font-size:12px">Nothing yet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── FEEDS TAB ───────────── -->
+  <div id="tab-feeds" class="page">
+    <div class="feeds-layout">
+
+      <!-- Add area -->
+      <div class="section-card">
+        <div class="section-card-hd">
+          <span>➕ Add New Camera Feed</span>
+          <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">All settings configured here — no config files needed</span>
+        </div>
+        <div class="section-card-body">
+          <div class="form-grid">
+            <div class="form-label-group">
+              <label>Area Name</label>
+              <input type="text" id="f-name" placeholder="e.g. Gate A" autocomplete="off">
+            </div>
+            <div class="form-label-group">
+              <label>Camera Source</label>
+              <input type="text" id="f-cam" placeholder="RTSP URL, file path, or 0 for webcam">
+              <div class="hint">e.g. rtsp://192.168.1.5/stream1 · /data/crowd.mp4 · 0</div>
+            </div>
+          </div>
+          <div class="form-label-group">
+            <label>Model Path (.keras)</label>
+            <input type="text" id="f-model" placeholder="Absolute path to your .keras model file">
+            <div class="hint">e.g. /home/user/models/heatmap_model.keras</div>
+          </div>
+          <div class="form-grid-3">
+            <div class="form-label-group">
+              <label>Scene Width (m)</label>
+              <input type="number" id="f-w" value="30" step="0.5" min="1">
+            </div>
+            <div class="form-label-group">
+              <label>Scene Height (m)</label>
+              <input type="number" id="f-h" value="30" step="0.5" min="1">
+            </div>
+            <div class="form-label-group">
+              <label>Density Threshold (p/m²)</label>
+              <input type="number" id="f-thresh" value="4.0" step="0.1" min="0.1">
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-label-group">
+              <label>Push Interval (s)</label>
+              <input type="number" id="f-push" value="1.0" step="0.1" min="0.1">
+              <div class="hint">How often to update DB</div>
+            </div>
+            <div class="form-label-group">
+              <label>Heatmap Alpha</label>
+              <input type="number" id="f-alpha" value="0.5" step="0.05" min="0" max="1">
+              <div class="hint">Overlay opacity</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button class="btn btn-safe" onclick="createArea()">Create Area & Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Workers table -->
+      <div class="section-card">
+        <div class="section-card-hd">
+          <span>🎥 Camera Feeds</span>
+          <button class="btn btn-ghost btn-sm" onclick="refreshWorkers()">↺ Refresh</button>
+        </div>
+        <div class="section-card-body" style="padding:0">
+          <table class="workers-table">
+            <thead>
+              <tr>
+                <th>Area</th>
+                <th>Camera Source</th>
+                <th>Model</th>
+                <th>Status</th>
+                <th>FPS</th>
+                <th>Count</th>
+                <th>Density</th>
+                <th>Controls</th>
+              </tr>
+            </thead>
+            <tbody id="workers-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ───────────── VOLUNTEERS TAB ───────────── -->
+  <div id="tab-volunteers" class="page">
+    <div class="vols-layout">
+
+      <!-- Volunteer list -->
+      <div>
+        <div class="section-card">
+          <div class="section-card-hd">
+            <span>👥 Registered Volunteers</span>
+            <button class="btn btn-ghost btn-sm" onclick="loadVolunteers()">↺ Refresh</button>
+          </div>
+          <div class="section-card-body">
+            <div id="vol-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Assignment panel -->
+      <div>
+        <div class="section-card">
+          <div class="section-card-hd">Assign to Area</div>
+          <div class="section-card-body">
+            <div class="form-label-group">
+              <label>Select Area</label>
+              <select id="assign-area-sel" onchange="renderAssignList()">
+                <option value="">— pick an area —</option>
+              </select>
+            </div>
+            <div class="sec-hd" style="margin-top:16px">Available Volunteers</div>
+            <div id="assign-list"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- VOLUNTEER DASHBOARD -->
+<div id="volunteer-app">
+  <div class="header">
+    <div class="hdr-left">
+      <div class="brand">
+        <div class="brand-dot"></div>
+        <span class="brand-name">Stampede EWS</span>
+        <span class="brand-tag">Volunteer</span>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <span id="vol-ws-indicator" class="ws-pill bad">● WS disconnected</span>
+      <span id="vol-name-badge" style="font-size:13px;color:var(--muted2)"></span>
+      <button class="btn btn-ghost btn-sm" onclick="logoutVolunteer()">Sign Out</button>
+    </div>
+  </div>
+  <div class="vol-main">
+    <div id="vol-banner" class="vol-banner standby">
+      <div class="vb-icon">🧭</div>
+      <div class="vb-title" id="vb-title">Awaiting Assignment</div>
+      <div class="vb-sub" id="vb-sub">You have not been assigned to an area yet.</div>
+      <div class="vol-area-meta" id="vol-area-meta"></div>
+      <div style="margin-top:18px">
+        <button class="btn btn-safe" id="vol-safe-btn" style="display:none" onclick="reportSafe()">✅ Report Area Safe</button>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-card-hd">
+        <span>📋 Instructions &amp; Messages</span>
+        <button class="btn btn-ghost btn-sm" onclick="loadVolMessages()">↺ Refresh</button>
+      </div>
+      <div class="section-card-body">
+        <div id="vol-messages"><div style="color:var(--muted);font-size:13px">No messages yet</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Area Modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <h2>Edit Area Settings</h2>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <input type="hidden" id="edit-area-id">
+    <div class="form-label-group">
+      <label>Area Name</label>
+      <input type="text" id="edit-name">
+    </div>
+    <div class="form-label-group">
+      <label>Camera Source</label>
+      <input type="text" id="edit-cam">
+    </div>
+    <div class="form-label-group">
+      <label>Model Path</label>
+      <input type="text" id="edit-model">
+    </div>
+    <div class="form-grid">
+      <div class="form-label-group"><label>Width (m)</label><input type="number" id="edit-w" step="0.5"></div>
+      <div class="form-label-group"><label>Height (m)</label><input type="number" id="edit-h" step="0.5"></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-label-group"><label>Density Threshold</label><input type="number" id="edit-thresh" step="0.1"></div>
+      <div class="form-label-group"><label>Push Interval (s)</label><input type="number" id="edit-push" step="0.1"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-info" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Open Area Modal -->
+<div class="modal-overlay" id="open-area-modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <h2>🔓 Reopen Area?</h2>
+      <button class="modal-close" onclick="closeOpenAreaModal()">✕</button>
+    </div>
+    <div id="open-area-modal-body"
+         style="font-size:14px;color:var(--muted2);line-height:1.7;margin-bottom:20px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="holdOpenArea()">Hold — Keep Closed</button>
+      <button class="btn btn-safe" id="open-area-confirm-btn">🔓 Open Area</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast-root"></div>
+
+<script>
+const API = 'http://localhost:8000';
+let token = null, ws = null;
+let areas = {}, volunteers = [], pendingAlerts = {}, gridState = {};
+let selectedAreaId = null;
+
+// ── Grid init ─────────────────────────────────────────────────────────────────
+(function initGrid() {
+  const g = document.getElementById('density-grid');
+  for (let i = 0; i < 64; i++) {
+    const c = document.createElement('div');
+    c.className = 'cell ok'; c.id = `cell-${i}`; g.appendChild(c);
+  }
+})();
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const u = document.getElementById('l-user').value;
+  const p = document.getElementById('l-pass').value;
+  try {
+    const r = await fetch(`${API}/auth/login`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username:u, password:p, role:'admin'})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Login failed');
+    token = d.token;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    initApp();
+  } catch(e) {
+    document.getElementById('l-err').textContent = e.message;
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (document.getElementById('register-screen').style.display !== 'none') { doRegister(); return; }
+  if (document.getElementById('login-screen').style.display !== 'none') {
+    const adminActive = document.getElementById('role-tab-admin').classList.contains('active');
+    adminActive ? doLogin() : doLoginVolunteer();
+  }
+});
+
+function logout() {
+  token = null; if(ws) ws.close();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+// ── Volunteer login / register ──────────────────────────────────────────────
+let volId = null, volName = null, volWs = null, volProfile = {};
+
+function switchLoginRole(role) {
+  document.getElementById('role-tab-admin').classList.toggle('active', role==='admin');
+  document.getElementById('role-tab-volunteer').classList.toggle('active', role==='volunteer');
+  document.getElementById('admin-login-form').style.display = role==='admin' ? 'block' : 'none';
+  document.getElementById('volunteer-login-form').style.display = role==='volunteer' ? 'block' : 'none';
+  document.getElementById('l-err').textContent = '';
+}
+
+function showRegister() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('register-screen').style.display = 'flex';
+}
+function hideRegister() {
+  document.getElementById('register-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  switchLoginRole('volunteer');
+}
+
+async function doRegister() {
+  const name  = document.getElementById('r-name').value.trim();
+  const email = document.getElementById('r-email').value.trim();
+  const phone = document.getElementById('r-phone').value.trim();
+  const pass  = document.getElementById('r-pass').value;
+  const errEl = document.getElementById('r-err');
+  errEl.textContent = '';
+  if (!name || !email || !pass) { errEl.textContent = 'Name, email and password are required'; return; }
+  try {
+    const r = await fetch(`${API}/auth/register`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, email, phone: phone||null, password: pass})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Registration failed');
+    ['r-name','r-email','r-phone','r-pass'].forEach(id => document.getElementById(id).value='');
+    hideRegister();
+    document.getElementById('v-user').value = email;
+    showToast('✅ Registered! Sign in below.', 'ok');
+  } catch(e) {
+    errEl.textContent = e.message;
+  }
+}
+
+async function doLoginVolunteer() {
+  const u = document.getElementById('v-user').value.trim();
+  const p = document.getElementById('v-pass').value;
+  try {
+    const r = await fetch(`${API}/auth/login`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username:u, password:p, role:'volunteer'})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Login failed');
+    token = d.token; volId = d.id; volName = d.name;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('volunteer-app').style.display = 'flex';
+    document.getElementById('vol-name-badge').textContent = volName;
+    initVolunteerApp();
+  } catch(e) {
+    document.getElementById('l-err').textContent = e.message;
+  }
+}
+
+function logoutVolunteer() {
+  token = null; volId = null;
+  if (volWs) volWs.close();
+  document.getElementById('volunteer-app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  switchLoginRole('volunteer');
+}
+
+// ── Volunteer app ────────────────────────────────────────────────────────────
+function initVolunteerApp() {
+  loadVolProfile();
+  loadVolMessages();
+  connectVolWS();
+  setInterval(loadVolProfile, 8000);
+}
+
+async function loadVolProfile() {
+  volProfile = await api('/volunteers/me');
+  renderVolBanner();
+}
+
+async function loadVolMessages() {
+  const msgs = await api('/messages/me');
+  const el = document.getElementById('vol-messages');
+  if (!msgs.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px">No messages yet</div>'; return; }
+  el.innerHTML = msgs.map(m => `
+    <div class="msg-item">
+      ${m.content}
+      <div class="msg-time">${new Date(m.created_at).toLocaleString()}</div>
+    </div>`).join('');
+}
+
+function connectVolWS() {
+  if (volWs) volWs.close();
+  volWs = new WebSocket(`ws://localhost:8000/ws/volunteer/${volId}/${token}`);
+  volWs.onopen  = () => setVolWSStatus(true);
+  volWs.onclose = () => { setVolWSStatus(false); setTimeout(connectVolWS, 3000); };
+  volWs.onerror = () => setVolWSStatus(false);
+  volWs.onmessage = e => handleVolWS(JSON.parse(e.data));
+}
+
+function setVolWSStatus(ok) {
+  const el = document.getElementById('vol-ws-indicator');
+  if (!el) return;
+  el.textContent = ok ? '● WS live' : '● WS disconnected';
+  el.className = `ws-pill ${ok?'ok':'bad'}`;
+}
+
+function handleVolWS(msg) {
+  if (msg.type === 'instruction') {
+    volProfile.area_status = msg.area_status;
+    renderVolBanner(msg.message);
+    loadVolMessages();
+    showToast(msg.action==='close_area' ? '🔒 Close the area now!' : '🔓 Area reopened', msg.action==='close_area'?'err':'ok');
+    playAlert();
+  } else if (msg.type === 'area_assigned') {
+    loadVolProfile();
+    showToast('📍 You have been assigned to a new area', 'ok');
+  }
+}
+
+function renderVolBanner(instructionMsg) {
+  const banner  = document.getElementById('vol-banner');
+  const title   = document.getElementById('vb-title');
+  const sub     = document.getElementById('vb-sub');
+  const meta    = document.getElementById('vol-area-meta');
+  const safeBtn = document.getElementById('vol-safe-btn');
+  const iconEl  = banner.querySelector('.vb-icon');
+
+  if (!volProfile || !volProfile.area_id) {
+    banner.className = 'vol-banner standby';
+    iconEl.textContent = '🧭';
+    title.textContent = 'Awaiting Assignment';
+    sub.textContent = 'You have not been assigned to an area yet.';
+    meta.innerHTML = '';
+    safeBtn.style.display = 'none';
+    return;
+  }
+
+  const closed = volProfile.area_status === 'closed';
+  banner.className = `vol-banner ${closed ? 'closed' : 'open'}`;
+  iconEl.textContent = closed ? '🔒' : '🔓';
+  title.textContent = closed
+    ? `CLOSE AREA — ${volProfile.area_name}`
+    : `${volProfile.area_name} — Standby`;
+  sub.textContent = instructionMsg || (closed
+    ? 'Direct crowd away and keep this area closed until further notice.'
+    : 'Area is currently open. Stay alert for instructions.');
+  meta.innerHTML = `
+    <span class="badge ${closed?'badge-closed':'badge-ok'}">${closed?'CLOSED':'OPEN'}</span>
+    <span class="badge" style="background:var(--bg4);color:var(--muted2)">density ${(volProfile.current_density||0).toFixed(2)}/m²</span>`;
+  safeBtn.style.display = closed ? 'inline-flex' : 'none';
+}
+
+function reportSafe() {
+  if (volWs && volWs.readyState === WebSocket.OPEN) {
+    volWs.send(JSON.stringify({type:'area_safe_confirmed'}));
+    showToast('Reported area as safe — awaiting admin confirmation', 'ok');
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function initApp() {
+  loadAreas(); loadVolunteers(); loadAlerts();
+  connectWS();
+  setInterval(() => { loadAreas(); refreshWorkers(); }, 5000);
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connectWS() {
+  if(ws) ws.close();
+  ws = new WebSocket(`ws://localhost:8000/ws/admin/${token}`);
+  ws.onopen  = () => setWSStatus(true);
+  ws.onclose = () => { setWSStatus(false); setTimeout(connectWS, 3000); };
+  ws.onerror = () => setWSStatus(false);
+  ws.onmessage = e => handleWS(JSON.parse(e.data));
+}
+let popupActive = false; // Tracks if a pop‑up is currently shown
+function setWSStatus(ok) {
+  const el = document.getElementById('ws-indicator');
+  el.textContent = ok ? '● WS live' : '● WS disconnected';
+  el.className = `ws-pill ${ok?'ok':'bad'}`;
+}
+
+function handleWS(msg) {
+  if (msg.type === 'metric_update') {
+    updateAreaLive(msg.area_id, msg.count, msg.density, msg.risk);
+    addLog(msg.area_id, `Count <b>${msg.count}</b> · Density <b>${msg.density}/m²</b>`,
+           msg.risk ? 'bad' : 'ok');
+  } else if (msg.type === 'risk_alert') {
+    // Show risk alert toast only if no other pop‑up is active
+    if (!popupActive) {
+      popupActive = true;
+      showToast(`🚨 ${msg.area_name} overcrowded! ${msg.density}/m²`, 'err');
+    }
+    addPendingAlert(msg); renderAlerts();
+    updateGridFromFlags(msg.area_id, msg.grid_flags);
+    playAlert();
+  } else if (msg.type === 'safe_report') {
+    // If a pop‑up was active (area was closed), show an open‑area toast
+    if (popupActive) {
+      popupActive = false;
+      showToast(`✅ ${msg.area_name} is now safe. You may reopen the area.`, 'ok');
+    } else {
+      showToast(`✅ ${msg.area_name} reported safe`, 'ok');
+    }
+    addPendingAlert(msg); renderAlerts();
+  } else if (msg.type === 'density_safe') {
+    addPendingAlert(msg);
+    renderAlerts();
+    showOpenAreaModal(msg.alert_id, msg.area_name, msg.density);
+    addLog(msg.area_id,
+           `✅ Density dropped to <b>${msg.density}/m²</b> — area eligible to reopen`);
+  } else if (msg.type === 'area_status_changed') {
+    loadAreas();
+  }
+  if (msg.grid_flags && msg.area_id) updateGridFromFlags(msg.area_id, msg.grid_flags);
+}
+
+// ── API helper ────────────────────────────────────────────────────────────────
+async function api(path, opts={}) {
+  const r = await fetch(`${API}${path}`, {
+    ...opts,
+    headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, ...(opts.headers||{}) }
+  });
+  return r.json();
+}
+
+// ── Load data ─────────────────────────────────────────────────────────────────
+async function loadAreas() {
+  const data = await api('/areas');
+  areas = {};
+  data.forEach(a => areas[a.id] = a);
+  renderAreaList();
+  populateAreaSelects();
+  if (document.getElementById('tab-feeds').classList.contains('active')) refreshWorkers();
+}
+async function loadVolunteers() {
+  volunteers = await api('/volunteers');
+  renderVolList();
+  renderAssignList();
+}
+async function loadAlerts() {
+  const data = await api('/alerts');
+  data.forEach(a => { if(!a.resolved) pendingAlerts[a.id] = a; });
+  renderAlerts();
+}
+async function refreshWorkers() {
+  const workers = await api('/inference/workers');
+  const workerMap = {};
+  workers.forEach(w => workerMap[w.area_id] = w);
+  renderWorkersTable(workerMap);
+}
+
+// ── Renderers ─────────────────────────────────────────────────────────────────
+function renderAreaList() {
+  const el = document.getElementById('areas-list');
+  el.innerHTML = '';
+  Object.values(areas).forEach(a => {
+    const risk = a.risk_flagged;
+    const ws_label = a.worker_status === 'running' ? `<span class="badge badge-run">▶ running ${a.worker_fps||0} fps</span>`
+                   : a.worker_status === 'error'   ? `<span class="badge badge-risk">✕ error</span>`
+                   : `<span class="badge" style="background:var(--bg4);color:var(--muted)">◼ stopped</span>`;
+    const badge = risk ? `<span class="badge badge-risk">RISK</span>`
+                : a.status === 'closed' ? `<span class="badge badge-closed">CLOSED</span>`
+                : `<span class="badge badge-ok">OK</span>`;
+    const div = document.createElement('div');
+    div.className = `area-card${risk?' risk':''}${a.id===selectedAreaId?' selected':''}`;
+    div.onclick = () => selectArea(a.id);
+    div.innerHTML = `
+      <div class="card-header">
+        <div class="area-name">${a.name}</div>${badge}
+      </div>
+      <div class="area-cam">${a.camera_source}</div>
+      <div class="area-stats">
+        <div class="stat">
+          <div class="stat-l">Count</div>
+          <div class="stat-v ${risk?'bad':'ok'}">${(a.current_count||0).toFixed(1)}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-l">Density /m²</div>
+          <div class="stat-v ${risk?'bad':'ok'}">${(a.current_density||0).toFixed(2)}</div>
+        </div>
+      </div>
+      <div class="worker-bar">
+        <div class="w-dot ${a.worker_status||'stopped'}"></div>
+        <span class="w-status">${ws_label}</span>
+        <div class="w-controls">
+          ${a.worker_status==='running'
+            ? `<button class="btn btn-xs" style="background:#e8394a20;color:var(--accent)" onclick="stopWorker('${a.id}',event)">■ Stop</button>`
+            : `<button class="btn btn-xs btn-safe" onclick="startWorker('${a.id}',event)">▶ Start</button>`}
+        </div>
+      </div>`;
+    el.appendChild(div);
+  });
+}
+
+function renderWorkersTable(workerMap) {
+  const tbody = document.getElementById('workers-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  Object.values(areas).forEach(a => {
+    const w = workerMap[a.id] || {};
+    const running = w.status === 'running';
+    const statusColor = w.status === 'running' ? 'var(--safe)'
+                      : w.status === 'error'   ? 'var(--accent)'
+                      : 'var(--muted)';
+    tbody.innerHTML += `
+      <tr>
+        <td><b>${a.name}</b></td>
+        <td class="font-mono" style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis">${a.camera_source}</td>
+        <td class="font-mono" style="font-size:10px;color:var(--muted2);max-width:120px;overflow:hidden;text-overflow:ellipsis">${a.model_path||'—'}</td>
+        <td class="font-mono" style="color:${statusColor}">${w.status||'stopped'}</td>
+        <td class="font-mono">${running?(w.fps||0):'—'}</td>
+        <td class="font-mono">${running?(w.last_count||0):'—'}</td>
+        <td class="font-mono">${running?(w.last_density||0):'—'}</td>
+        <td>
+          <div style="display:flex;gap:6px;align-items:center">
+            ${running
+              ? `<button class="btn btn-xs" style="background:#e8394a20;color:var(--accent)" onclick="stopWorker('${a.id}',event)">■ Stop</button>`
+              : `<button class="btn btn-xs btn-safe" onclick="startWorker('${a.id}',event)">▶ Start</button>`}
+            <button class="btn btn-xs btn-ghost" onclick="openEditModal('${a.id}')">✏ Edit</button>
+            <button class="btn btn-xs" style="background:#e8394a20;color:var(--accent)" onclick="deleteArea('${a.id}')">✕</button>
+          </div>
+          ${w.error ? `<div style="font-size:10px;color:var(--accent);margin-top:4px;font-family:var(--mono)">${w.error}</div>` : ''}
+        </td>
+      </tr>`;
+  });
+  if (!Object.keys(areas).length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px">No areas yet — add one above</td></tr>`;
+  }
+}
+
+function renderVolList() {
+  const el = document.getElementById('vol-list');
+  el.innerHTML = '';
+  if (!volunteers.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px">No volunteers registered yet</div>'; return; }
+  volunteers.forEach(v => {
+    const initials = v.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+    const online = v.status !== 'offline';
+    const areaOptions = Object.values(areas).map(a =>
+      `<option value="${a.id}" ${a.id===v.area_id?'selected':''}>${a.name}</option>`).join('');
+    el.innerHTML += `
+      <div class="vol-row" style="flex-wrap:wrap">
+        <div class="vol-avatar">${initials}</div>
+        <div class="vol-info">
+          <div class="vol-name">${v.name}</div>
+          <div class="vol-email">${v.email}${v.phone?` · ${v.phone}`:''}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="badge ${online?'badge-ok':''}" style="${!online?'background:var(--bg4);color:var(--muted)':''}">${v.status}</div>
+          <div class="vol-email" style="margin-top:4px">${v.area_name||'Unassigned'}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;width:100%;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+          <select id="reassign-sel-${v.id}" style="flex:1;padding:6px 10px;font-size:12px">
+            <option value="">— assign / reassign to —</option>
+            ${areaOptions}
+          </select>
+          <button class="btn btn-xs btn-info" onclick="reassignVol('${v.id}')">Assign</button>
+          ${v.area_id ? `<button class="btn btn-xs" style="background:#e8394a20;color:var(--accent)" onclick="unassignVol('${v.id}')">Unassign</button>` : ''}
+        </div>
+      </div>`;
+  });
+}
+
+async function reassignVol(volunteerId) {
+  const sel = document.getElementById(`reassign-sel-${volunteerId}`);
+  const areaId = sel.value;
+  if (!areaId) { showToast('Pick an area first', 'err'); return; }
+  await api(`/areas/${areaId}/assign`, {method:'POST', body:JSON.stringify({volunteer_id:volunteerId})});
+  showToast('Volunteer (re)assigned', 'ok');
+  loadVolunteers();
+}
+
+async function unassignVol(volunteerId) {
+  await api(`/volunteers/${volunteerId}/unassign`, {method:'POST'});
+  showToast('Volunteer unassigned', '');
+  loadVolunteers();
+}
+
+function renderAssignList() {
+  const el = document.getElementById('assign-list');
+  const sel = document.getElementById('assign-area-sel');
+  const areaId = sel ? sel.value : '';
+  if (!areaId) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">Select an area above</div>'; return; }
+  const unassigned = volunteers.filter(v => !v.area_id || v.area_id !== areaId);
+  if (!unassigned.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">All volunteers assigned here</div>'; return; }
+  el.innerHTML = unassigned.map(v => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px">${v.name} <span style="color:var(--muted);font-size:11px">(${v.status})</span></span>
+      <button class="btn btn-xs btn-info" onclick="assignVol('${v.id}','${areaId}')">Assign</button>
+    </div>`).join('');
+}
+
+function populateAreaSelects() {
+  const sel = document.getElementById('assign-area-sel');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— pick an area —</option>';
+  Object.values(areas).forEach(a => {
+    const o = document.createElement('option');
+    o.value = a.id; o.textContent = a.name;
+    if (a.id === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+function renderAlerts() {
+  const pending = document.getElementById('alerts-list');
+  pending.innerHTML = '';
+  const items = Object.values(pendingAlerts);
+  if (!items.length) { pending.innerHTML = '<div style="color:var(--muted);font-size:12px">All clear</div>'; return; }
+  items.forEach(a => {
+    const isRisk = a.alert_type === 'risk_detected';
+    const isSafe = a.alert_type === 'safe_report'
+                || a.alert_type === 'safe_reported'
+                || a.alert_type === 'density_safe';
+    let btns = '';
+    const areaIsClosed = areas[a.area_id]?.status === 'closed';
+    if (isRisk && !a.admin_approved && !areaIsClosed) {
+      btns = `<div class="alert-btns">
+        <button class="btn btn-sm" onclick="approveAlert('${a.id}','close_area')">🔒 Close Area</button>
+        <button class="btn btn-sm btn-ghost" onclick="dismissAlert('${a.id}')">Dismiss</button>
+      </div>`;
+    } else if (isRisk && !a.admin_approved && areaIsClosed) {
+      btns = `<div class="alert-btns">
+        <span style="font-size:11px;color:var(--warn);font-family:var(--mono)">🔒 Area already closed</span>
+        <button class="btn btn-sm btn-ghost" onclick="dismissAlert('${a.id}')">Dismiss</button>
+      </div>`;
+    } else if (isSafe) {
+      btns = `<div class="alert-btns">
+        <button class="btn btn-sm btn-safe" onclick="approveAlert('${a.id}','open_area')">🔓 Open Area</button>
+        <button class="btn btn-sm btn-ghost" onclick="dismissAlert('${a.id}')">Hold</button>
+      </div>`;
+    }
+    pending.innerHTML += `
+      <div class="alert-card ${isSafe?'safe-r':''}">
+        <div class="alert-hd">
+          <div class="alert-title">${isRisk?'🚨':'✅'} ${a.area_name}</div>
+          <div class="alert-time">${new Date(a.created_at).toLocaleTimeString()}</div>
+        </div>
+        <div class="alert-body">
+          ${isRisk ? `Density: <b>${(a.density||0).toFixed(2)}/m²</b> · Count: ${(a.count||0).toFixed(0)}`
+                   : 'Volunteer reports area is safe'}
+        </div>
+        ${btns}
+      </div>`;
+  });
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+async function createArea() {
+  const name = document.getElementById('f-name').value.trim();
+  const cam  = document.getElementById('f-cam').value.trim();
+  if (!name || !cam) { showToast('Area name and camera source are required', 'err'); return; }
+  const data = {
+    name, camera_source: cam,
+    model_path:        document.getElementById('f-model').value.trim(),
+    scene_width_m:     parseFloat(document.getElementById('f-w').value),
+    scene_height_m:    parseFloat(document.getElementById('f-h').value),
+    density_threshold: parseFloat(document.getElementById('f-thresh').value),
+    push_interval:     parseFloat(document.getElementById('f-push').value),
+    alpha:             parseFloat(document.getElementById('f-alpha').value),
+  };
+  const r = await api('/areas', {method:'POST', body:JSON.stringify(data)});
+  showToast(`✅ Area "${name}" created`, 'ok');
+  ['f-name','f-cam','f-model'].forEach(id => document.getElementById(id).value='');
+  loadAreas();
+}
+
+async function startWorker(areaId, e) {
+  if (e) e.stopPropagation();
+  await api('/inference/start', {method:'POST', body:JSON.stringify({area_id:areaId})});
+  showToast('▶ Worker starting…', 'ok');
+  setTimeout(loadAreas, 1500);
+}
+
+async function stopWorker(areaId, e) {
+  if (e) e.stopPropagation();
+  await api('/inference/stop', {method:'POST', body:JSON.stringify({area_id:areaId})});
+  showToast('■ Worker stopped', '');
+  setTimeout(loadAreas, 800);
+}
+
+async function deleteArea(areaId) {
+  if (!confirm('Delete this area and stop its worker?')) return;
+  await api(`/areas/${areaId}`, {method:'DELETE'});
+  showToast('Area deleted', '');
+  loadAreas();
+}
+
+async function assignVol(volId, areaId) {
+  await api(`/areas/${areaId}/assign`, {method:'POST', body:JSON.stringify({volunteer_id:volId})});
+  showToast('Volunteer assigned', 'ok');
+  loadVolunteers();
+}
+
+async function approveAlert(alertId, action) {
+  await api('/alerts/approve', {method:'POST', body:JSON.stringify({alert_id:alertId, action})});
+  delete pendingAlerts[alertId];
+  renderAlerts();
+  showToast(action==='close_area'?'🔒 Area closed, volunteers notified':'🔓 Area reopened', 'ok');
+  // Reset pop‑up state after closing area
+  popupActive = false;
+  loadAreas();
+}
+
+function dismissAlert(id) { delete pendingAlerts[id]; renderAlerts(); }
+
+function selectArea(id) {
+  selectedAreaId = id;
+  const a = areas[id];
+  document.getElementById('grid-area-name').textContent = `— ${a.name}`;
+  document.getElementById('cam-info').textContent =
+    `${a.scene_width_m}m × ${a.scene_height_m}m  ·  threshold ${a.density_threshold}/m²`;
+  renderAreaList();
+  if (gridState[id]) updateGridFromFlags(id, gridState[id]);
+  // Update video panel
+  updateVideoPanel(a);
+}
+
+function updateVideoPanel(a, forceReload = false) {
+  const img         = document.getElementById('video-feed');
+  const placeholder = document.getElementById('video-placeholder');
+  const nameEl      = document.getElementById('video-area-name');
+  const badge       = document.getElementById('video-status-badge');
+  const meta        = document.getElementById('video-meta');
+
+  nameEl.textContent = a ? `— ${a.name}` : '';
+
+  if (!a || a.worker_status !== 'running') {
+    img.style.display         = 'none';
+    img.src                   = '';
+    placeholder.style.display = 'flex';
+    badge.innerHTML           = '';
+    meta.textContent          = a ? `Status: ${a.worker_status || 'stopped'}` : '';
+    return;
+  }
+
+  // Worker is running — point img at MJPEG endpoint
+  const url = `http://localhost:8000/video/${a.id}`;
+  if (img.src !== url || forceReload) {
+    img.src = forceReload ? `${url}?t=${Date.now()}` : url;          // triggers browser MJPEG streaming
+  }
+  img.style.display         = 'block';
+  placeholder.style.display = 'none';
+  badge.innerHTML           = `<span class="badge badge-run" style="font-size:9px">● LIVE</span>`;
+  meta.textContent          = `${a.camera_source}  ·  ${a.worker_fps||0} fps`;
+}
+
+function onVideoError() {
+  const img         = document.getElementById('video-feed');
+  const placeholder = document.getElementById('video-placeholder');
+  img.style.display = 'none';
+  placeholder.style.display = 'flex';
+  placeholder.innerHTML = '<div class="ph-icon">⚠</div><div>Feed unavailable — is the worker running?</div>';
+
+  if (selectedAreaId) {
+    setTimeout(() => {
+      const a = areas[selectedAreaId];
+      if (a && a.worker_status === 'running') {
+        updateVideoPanel(a, true);
+      }
+    }, 1500);
+  }
+}
+
+function onVideoLoad() {
+  // MJPEG continuously loads — nothing special needed
+}
+
+function updateAreaLive(areaId, count, density, risk) {
+  if (areas[areaId]) {
+    areas[areaId].current_count   = count;
+    areas[areaId].current_density = density;
+    areas[areaId].risk_flagged    = risk ? 1 : 0;
+    renderAreaList();
+    // Refresh video panel if this is the selected area and it just started streaming
+    if (areaId === selectedAreaId) updateVideoPanel(areas[areaId]);
+  }
+}
+
+function updateGridFromFlags(areaId, flags) {
+  gridState[areaId] = flags;
+  if (areaId !== selectedAreaId) return;
+  for (let i=0;i<64;i++) { const c=document.getElementById(`cell-${i}`); if(c) c.className='cell ok'; }
+  flags.forEach(f => {
+    const idx = f.row*8 + f.col;
+    const c = document.getElementById(`cell-${idx}`);
+    if (c) c.className = 'cell risk';
+  });
+}
+
+function showOpenAreaModal(alertId, areaName, density) {
+  document.getElementById('open-area-modal-body').innerHTML =
+    `Density in <b>${areaName}</b> has dropped to <b>${density}/m²</b>, `
+    + `below the configured threshold.<br><br>`
+    + `Reopen the area and notify assigned volunteers?`;
+  document.getElementById('open-area-confirm-btn').onclick = () => {
+    closeOpenAreaModal();
+    approveAlert(alertId, 'open_area');
+  };
+  document.getElementById('open-area-modal').classList.add('open');
+}
+
+function closeOpenAreaModal() {
+  document.getElementById('open-area-modal').classList.remove('open');
+}
+
+function holdOpenArea() {
+  closeOpenAreaModal();
+  showToast('Area kept closed — use Pending Actions panel to reopen later', '');
+}
+
+function addPendingAlert(msg) {
+  pendingAlerts[msg.alert_id] = {
+    id: msg.alert_id, area_id: msg.area_id, area_name: msg.area_name,
+    alert_type: msg.type==='safe_report' ? 'safe_reported'
+               : msg.type==='density_safe' ? 'density_safe'
+               : 'risk_detected',
+    density: msg.density, count: msg.count,
+    created_at: msg.timestamp||new Date().toISOString(), admin_approved:0
+  };
+}
+
+function addLog(areaId, text) {
+  const el = document.getElementById('activity-log');
+  const d = document.createElement('div');
+  const aname = areas[areaId]?.name || areaId;
+  d.className = 'log-item';
+  d.innerHTML = `<span style="color:var(--muted)">${new Date().toLocaleTimeString()}</span>  <b style="color:var(--muted2)">${aname}</b>  ${text}`;
+  el.insertBefore(d, el.firstChild);
+  while (el.children.length > 40) el.removeChild(el.lastChild);
+}
+
+// ── Edit modal ────────────────────────────────────────────────────────────────
+function openEditModal(areaId) {
+  const a = areas[areaId];
+  if (!a) return;
+  document.getElementById('edit-area-id').value = areaId;
+  document.getElementById('edit-name').value  = a.name;
+  document.getElementById('edit-cam').value   = a.camera_source;
+  document.getElementById('edit-model').value = a.model_path||'';
+  document.getElementById('edit-w').value     = a.scene_width_m;
+  document.getElementById('edit-h').value     = a.scene_height_m;
+  document.getElementById('edit-thresh').value= a.density_threshold;
+  document.getElementById('edit-push').value  = a.push_interval||1.0;
+  document.getElementById('edit-modal').classList.add('open');
+}
+function closeEditModal() { document.getElementById('edit-modal').classList.remove('open'); }
+
+async function saveEdit() {
+  const id = document.getElementById('edit-area-id').value;
+  const data = {
+    name:              document.getElementById('edit-name').value,
+    camera_source:     document.getElementById('edit-cam').value,
+    model_path:        document.getElementById('edit-model').value,
+    scene_width_m:     parseFloat(document.getElementById('edit-w').value),
+    scene_height_m:    parseFloat(document.getElementById('edit-h').value),
+    density_threshold: parseFloat(document.getElementById('edit-thresh').value),
+    push_interval:     parseFloat(document.getElementById('edit-push').value),
+  };
+  await api(`/areas/${id}`, {method:'PATCH', body:JSON.stringify(data)});
+  closeEditModal();
+  showToast('Settings saved and applied live', 'ok');
+  loadAreas();
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t => {
+    if (t.textContent.toLowerCase().includes(name)) t.classList.add('active');
+  });
+  if (name === 'feeds') refreshWorkers();
+  if (name === 'volunteers') { loadVolunteers(); populateAreaSelects(); }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg, type='') {
+  const c = document.getElementById('toast-root');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+// ── Alert sound ───────────────────────────────────────────────────────────────
+function playAlert() {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(); osc.stop(ctx.currentTime + 0.5);
+  } catch(e) {}
+}
+</script>
+</body>
+</html>

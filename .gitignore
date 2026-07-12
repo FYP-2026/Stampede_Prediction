@@ -17,19 +17,11 @@ build/
 datasets/raw/
 datasets/processed/
 
-# Trained Models (TOO LARGE)
-models/*.pth
-models/*.pt
-
-# Outputs
-outputs/
-*.mp4
-*.avi
-
 # IDE
 .vscode/
 .idea/
 *.swp
+.claude/
 
 # OS
 .DS_Store
@@ -40,5 +32,4 @@ Thumbs.db
 *.ipynb
 
 # Logs
-*.log
-*.jpg
+activation_script.txt

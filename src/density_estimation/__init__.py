@@ -1,1 +1,0 @@
-# Density estimation package
