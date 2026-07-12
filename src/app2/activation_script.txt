@@ -1,1 +1,0 @@
-conda activate C:\Users\sarve\miniconda3\envs\dataScience

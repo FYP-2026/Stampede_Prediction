@@ -119,7 +119,7 @@ Stampede_Prediction/
 
 1. Navigate to the web application directory and launch the server:
    ```bash
-   cd src/app2
+   cd src/app
    python server.py
    ```
    *This starts the FastAPI backend server on `http://localhost:8000`.*
@@ -145,4 +145,4 @@ Stampede_Prediction/
 
 Model training notebooks, metrics, and dataset preparation steps can be found in `src/preprocessing/` and `src/model/`.
 - Training can be performed locally or via high-performance GPU instances like Google Colab using the provided Jupyter Notebooks.
-- The default model weights (`67_precision49_recall.keras`) are loaded automatically when starting the camera workers.
+- The default model weights (`217k_relu.keras`) are loaded automatically when starting the camera workers.
