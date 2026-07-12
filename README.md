@@ -25,7 +25,7 @@ The project consists of three core components working in tandem:
                                        ▼
     ┌──────────────────────────────────────────────────────────────────┐
     │                     Unified Backend Server                       │
-    │         - FastAPI Web Server (src/app2/server.py)                │
+    │         - FastAPI Web Server (src/app/server.py)                 │
     │         - SQLite Database (stampede.db)                          │
     │         - WebSocket Alert Broadcasting & Sound Indicators        │
     └───────────────────┬──────────────────────────────▲───────────────┘
@@ -49,11 +49,10 @@ Stampede_Prediction/
 ├── requirements.txt          # Minimal Python dependencies for local development
 ├── stampede.db               # SQLite database mapping area settings & volunteer records
 ├── src/
-│   ├── app2/                 # Unified v2 Web Application (Backend & Dashboard)
+│   ├── app/                  # Unified v2 Web Application (Backend & Dashboard)
 │   │   ├── index.html        # Premium Admin Panel with Live Monitor, Feeds & Volunteers tabs
 │   │   ├── server.py         # FastAPI backend managing concurrent in-process background worker threads
-│   │   ├── requirements.txt  # FastAPI & Web-specific dependencies
-│   │   └── ISSUES_AND_PLAN.md# v1 issues analysis and v2 design & upgrade specification
+│   │   └── requirements.txt  # FastAPI & Web-specific dependencies
 │   │
 │   ├── model/                # Crowd density and counting models
 │   │   ├── heatmap_model/    # Heatmap-based crowd density estimation CNN model (.keras)
@@ -84,7 +83,7 @@ Stampede_Prediction/
 - Employs a triple-thread architecture (Capture Thread → Inference Thread → Display Thread) separated by thread-safe, latency-bounded queues.
 - Discards stale frames instead of stalling processing to maintain real-time frame rates during heavy computation load.
 
-### 3. Unified Web Dashboard & In-Process Workers (`src/app2/`)
+### 3. Unified Web Dashboard & In-Process Workers (`src/app/`)
 - **No Manual Configuration Files**: Manage all camera feeds, models, and threshold rules directly from a graphical Web UI.
 - **Concurrent Camera Feeds**: Spin up multiple camera feeds in independent background daemon threads controlled directly through the backend.
 - **Hot-Reloadable Parameters**: Adjust density thresholds, prediction confidence, or push intervals on-the-fly without stopping or restarting processes.
@@ -132,7 +131,9 @@ Stampede_Prediction/
 
 4. Add a Camera Feed:
    - Go to the **Feeds & Cameras** tab.
-   - Enter your Area Name, Camera Source (can be an RTSP URL, a video file path, or `0` for your local webcam), Model Path (e.g., `../model/heatmap_model/67_precision49_recall.keras`), and dimensions.
+   - Enter your Area Name, Camera Source (can be an RTSP URL, a video file path, or `0` for your local webcam).
+   - The Model Path field is pre-populated with the default model: `../model/heatmap_model/217k_relu/217k_relu.keras` (change this only if you want to use a different model).
+   - Enter scene dimensions and other configuration parameters.
    - Click **Create Area & Save**.
 
 5. Start Real-time Detection:
