@@ -201,7 +201,7 @@ def weighted_focal_loss(gamma=2.0, pos_weight=800.0):
 custom_objects = {'loss': weighted_focal_loss}
 
 model = tf.keras.models.load_model(
-    '../model/heatmap_model/67_precision49_recall.keras',
+    '../model/heatmap_model/217k_relu/217k_relu.keras',
     custom_objects=custom_objects
 )
 
